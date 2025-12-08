@@ -1,0 +1,4 @@
+- [ ] Scaffold Node.js backend with MongoDB
+- [ ] Customize backend with sample model, controller, route
+- [ ] Install required dependencies
+- [ ] Verify and update documentation
