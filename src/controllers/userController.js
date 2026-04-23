@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import User from '../models/user.js';
+import AgentProfile from '../models/agentProfile.js';
 
 const buildAuthToken = (user) => {
   return jwt.sign(
@@ -196,12 +197,41 @@ export const loginUser = async (req, res) => {
 
     if (user.role === 'agent') {
       userResponse.businessType = user.businessType || null;
+      const profile = await AgentProfile.findOne({ userId: user._id });
+      userResponse.authorization = profile?.authorization || null;
     }
 
     res.json({
       message: 'Login successful',
       token,
       user: userResponse
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+export const loginAdmin = async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const user = await User.findOne({ email, role: 'admin' });
+    if (!user) return res.status(401).json({ error: 'Invalid admin email or password.' });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(401).json({ error: 'Invalid admin email or password.' });
+
+    const token = buildAuthToken(user);
+
+    res.json({
+      message: 'Admin login successful',
+      token,
+      user: {
+        id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role
+      }
     });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
@@ -227,5 +257,27 @@ export const createTestUser = async () => {
     }
   } catch (err) {
     console.error('Error creating test user:', err.message);
+  }
+};
+
+export const createAdminUser = async () => {
+  const testAdmin = {
+    name: 'System Admin',
+    email: process.env.ADMIN_EMAIL || 'admin@example.com',
+    password: process.env.ADMIN_PASSWORD || 'Admin@1234',
+    role: 'admin'
+  };
+
+  try {
+    const exists = await User.findOne({ email: testAdmin.email });
+    if (!exists) {
+      const user = new User(testAdmin);
+      await user.save();
+      console.log('Admin user created:', user.email);
+    } else {
+      console.log('Admin user already exists.');
+    }
+  } catch (err) {
+    console.error('Error creating admin user:', err.message);
   }
 };

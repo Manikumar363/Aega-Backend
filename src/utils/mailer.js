@@ -44,3 +44,28 @@ export const verifyTransporter = async () => {
     return false;
   }
 };
+
+export const sendAgentCredentialsEmail = async ({ email, fullName, password }) => {
+  const appName = process.env.APP_NAME || 'AEGA';
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+    to: email,
+    subject: `${appName} Agent Account Credentials`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Welcome to ${appName}</h2>
+        <p>Hi ${fullName},</p>
+        <p>Your agent account has been created successfully.</p>
+        <div style="background-color: #f0f0f0; padding: 16px; border-radius: 6px; margin: 16px 0;">
+          <p style="margin: 4px 0;"><strong>Email:</strong> ${email}</p>
+          <p style="margin: 4px 0;"><strong>Temporary Password:</strong> ${password}</p>
+        </div>
+        <p>Please login and change your password immediately.</p>
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 24px 0;">
+        <p style="color: #666; font-size: 12px;">This is an automated email. Please do not reply.</p>
+      </div>
+    `
+  };
+
+  return transporter.sendMail(mailOptions);
+};

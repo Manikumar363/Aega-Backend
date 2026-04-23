@@ -7,7 +7,11 @@ import userRoutes from './routes/user.js';
 import authRoutes from './routes/auth.js';
 import uploadRoutes from './routes/upload.js';
 import passwordRoutes from './routes/password.js';
-import { createTestUser } from './controllers/userController.js';
+import companyRoutes from './routes/company.js';
+import cdpRoutes from './routes/cdp.js';
+import cdpAdminRoutes from './routes/cdpAdmin.js';
+import agentAdminRoutes from './routes/agentAdmin.js';
+import { createAdminUser, createTestUser } from './controllers/userController.js';
 
 dotenv.config();
 
@@ -47,9 +51,14 @@ app.use('/api/users', userRoutes);
 app.use('/auth', authRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/password', passwordRoutes);
+app.use('/api/companies', companyRoutes);
+app.use('/api/cdp-courses', cdpRoutes);
+app.use('/api/admin/cdp-courses', cdpAdminRoutes);
+app.use('/api/agent-management', agentAdminRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   await createTestUser();
+  await createAdminUser();
 });

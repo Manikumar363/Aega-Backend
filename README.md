@@ -83,6 +83,19 @@ Example request body:
   - `email`
   - `password`
 
+### Admin Login
+
+- Endpoint: `POST /auth/admin/login`
+- Content-Type: `application/json`
+- Required fields:
+  - `email`
+  - `password`
+
+Default dev credentials if `ADMIN_EMAIL` and `ADMIN_PASSWORD` are not set:
+
+- Email: `admin@example.com`
+- Password: `Admin@1234`
+
 ## Password Reset API
 
 ### Request Password Reset (Send OTP)
@@ -184,5 +197,185 @@ Response shape:
 - Allowed file types: JPG, JPEG, PNG, WEBP, PDF
 
 ---
+
+## Company Management API
+
+These endpoints require a valid `Bearer` token from `POST /auth/login` and are limited to users with role `agent`.
+
+### Create Company
+
+- Endpoint: `POST /api/companies`
+- Content-Type: `application/json`
+- Required fields:
+  - `companyName`
+  - `founderName`
+  - `emailId`
+  - `mobileNumber`
+  - `designation`
+  - `office`
+  - `country`
+  - `companyDocument1`
+  - `companyDocument2`
+
+Example request body:
+
+```json
+{
+  "companyName": "Jane Enterprises",
+  "founderName": "Lorence",
+  "emailId": "jane@gmail.com",
+  "mobileNumber": "+1 123 589 6740",
+  "designation": "Designation Name",
+  "office": "Location",
+  "country": "Region Name",
+  "companyDocument1": "/uploads/company-doc-1.pdf",
+  "companyDocument2": "/uploads/company-doc-2.pdf"
+}
+```
+
+### Get Companies
+
+- Endpoint: `GET /api/companies`
+- Returns all companies created by the authenticated agent.
+
+### Get Company Overview (Info tab + graph values)
+
+- Endpoint: `GET /api/companies/:companyId/overview`
+- Access: authenticated agent (owner) or admin/sponsor
+
+### Update Company Graph Values (Admin)
+
+- Endpoint: `PUT /api/companies/:companyId/performance`
+- Access: admin/sponsor only
+- Body shape:
+
+```json
+{
+  "performanceMatrix": {
+    "visaRefusal": { "weekly": 75, "monthly": 70, "yearly": 65, "max": 75 },
+    "enrollment": { "weekly": 24, "monthly": 35, "yearly": 45, "max": 75 },
+    "withdrawnStudent": { "weekly": 1, "monthly": 10, "yearly": 15, "max": 75 }
+  }
+}
+```
+
+## CDP Training API
+
+Admin controls CDP course creation, edit, delete, and detailed view. Agents can only list courses.
+
+### Create CDP Course (Admin)
+
+- Endpoint: `POST /api/admin/cdp-courses`
+- Access: admin/sponsor only
+- Required fields:
+  - `courseName`
+  - `type` (`mandatory` or `optional`)
+  - `timeInHr`
+  - `modules`
+  - `hyperLink`
+  - `description`
+  - `coverPicture`
+
+Example body:
+
+```json
+{
+  "courseName": "Student Conversion Mastery",
+  "type": "mandatory",
+  "timeInHr": 20,
+  "modules": 8,
+  "hyperLink": "https://example.com/courses/student-conversion",
+  "description": "Hands-on modules focused on enrollment conversion and counseling frameworks.",
+  "coverPicture": "/uploads/cdp-cover-student-conversion.png"
+}
+```
+
+### List CDP Courses (All Agents)
+
+- Endpoint: `GET /api/cdp-courses`
+- Access: agent only
+
+### Get All CDP Courses (Admin)
+
+- Endpoint: `GET /api/admin/cdp-courses`
+- Access: admin only
+
+### View Single CDP Course (Admin)
+
+- Endpoint: `GET /api/admin/cdp-courses/:courseId`
+- Access: admin only
+
+### Edit CDP Course (Admin)
+
+- Endpoint: `PUT /api/admin/cdp-courses/:courseId`
+- Access: admin only
+
+### Delete CDP Course (Admin)
+
+- Endpoint: `DELETE /api/admin/cdp-courses/:courseId`
+- Access: admin only
+
+## Agent Management API
+
+B2B and B2C agents can manage their own agent records based on authorization flags. The API auto-generates a password and sends credentials to the agent email.
+
+### Add Agent (Admin)
+
+- Endpoint: `POST /api/agent-management`
+- Access: authenticated b2b/b2c agent with `addAgent` permission
+- Required fields:
+  - `firstName`
+  - `lastName`
+  - `emailId`
+  - `mobileNumber`
+  - `designation`
+  - `office`
+  - `country`
+  - `authorization` object with action flags
+
+Example body:
+
+```json
+{
+  "firstName": "Jane",
+  "lastName": "Lorence",
+  "emailId": "jane@gmail.com",
+  "mobileNumber": "+1 123 589 6740",
+  "designation": "Designation Name",
+  "office": "Location",
+  "country": "Region Name",
+  "authorization": {
+    "addAgent": true,
+    "editAgent": true,
+    "assignUni": true,
+    "addOffice": true,
+    "editOffice": true,
+    "removeOffice": true,
+    "assignRegion": true,
+    "assignCourse": true,
+    "removeAgent": false
+  }
+}
+```
+
+### Get All Agents (Admin)
+
+- Endpoint: `GET /api/agent-management`
+- Access: authenticated b2b/b2c agent
+
+### View Agent by ID (Admin)
+
+- Endpoint: `GET /api/agent-management/:agentId`
+- Access: authenticated b2b/b2c agent
+
+### Edit Agent (Admin)
+
+- Endpoint: `PUT /api/agent-management/:agentId`
+- Access: authenticated b2b/b2c agent with `editAgent` permission
+
+### Delete Agent (Admin)
+
+- Endpoint: `DELETE /api/agent-management/:agentId`
+- Access: authenticated b2b/b2c agent with `removeAgent` permission
 
 Replace placeholders and add more features as needed.
