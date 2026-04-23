@@ -21,12 +21,30 @@ const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:4000,http:
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+const isAllowedOrigin = (origin) => {
+  if (!origin) {
+    return true;
+  }
+
+  if (allowedOrigins.includes(origin)) {
+    return true;
+  }
+
+  // Optional fallback for common hosted frontends when CORS_ORIGINS is not set yet.
+  if (origin.endsWith('.onrender.com') || origin.endsWith('.vercel.app')) {
+    return true;
+  }
+
+  return false;
+};
+
 const corsOptions = {
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (isAllowedOrigin(origin)) {
       return callback(null, true);
     }
-    return callback(new Error('Not allowed by CORS'));
+
+    return callback(null, false);
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
