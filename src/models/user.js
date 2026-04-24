@@ -11,6 +11,15 @@ const userSchema = new mongoose.Schema({
   role: { type: String, enum: ['admin', 'sponsor', 'agent', 'university'], required: true },
   businessType: { type: String, enum: ['b2b', 'b2c', null], default: null },
   profileImage: { type: String, default: null },
+  phone: { type: String, default: null, trim: true },
+  dateOfBirth: { type: String, default: null, trim: true },
+  companyName: { type: String, default: null, trim: true },
+  buildingNumber: { type: String, default: null, trim: true },
+  city: { type: String, default: null, trim: true },
+  postCode: { type: String, default: null, trim: true },
+  state: { type: String, default: null, trim: true },
+  streetAddress: { type: String, default: null, trim: true },
+  streetName: { type: String, default: null, trim: true },
   documents: [
     {
       label: { type: String, required: true },

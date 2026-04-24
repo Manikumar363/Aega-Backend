@@ -119,6 +119,25 @@ Example body:
 }
 ```
 
+### Reset Password From Profile
+
+- Endpoint: `PUT /api/profile/reset-password`
+- Access: agent only
+- Required fields:
+  - `currentPassword`
+  - `newPassword`
+  - `confirmPassword`
+
+Example body:
+
+```json
+{
+  "currentPassword": "Old@1234",
+  "newPassword": "New@1234",
+  "confirmPassword": "New@1234"
+}
+```
+
 ### Admin Login
 
 - Endpoint: `POST /auth/admin/login`

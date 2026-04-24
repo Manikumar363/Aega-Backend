@@ -14,6 +14,15 @@ const buildAgentProfileResponse = (user) => ({
   role: user.role,
   businessType: user.businessType || null,
   profileImage: user.profileImage || null,
+  phone: user.phone || null,
+  dateOfBirth: user.dateOfBirth || null,
+  companyName: user.companyName || null,
+  buildingNumber: user.buildingNumber || null,
+  city: user.city || null,
+  postCode: user.postCode || null,
+  state: user.state || null,
+  streetAddress: user.streetAddress || null,
+  streetName: user.streetName || null,
   supportingDocuments: (user.documents || []).map((doc) => ({
     label: doc.label,
     path: doc.path
@@ -261,6 +270,11 @@ export const loginAdmin = async (req, res) => {
 
 export const getMyAgentProfile = async (req, res) => {
   try {
+    const requestedUserId = normalizeText(req.params.userId);
+    if (requestedUserId && requestedUserId !== String(req.user.id)) {
+      return res.status(403).json({ error: 'You can only access your own profile.' });
+    }
+
     const user = await User.findById(req.user.id).select('-password');
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
@@ -278,6 +292,11 @@ export const getMyAgentProfile = async (req, res) => {
 
 export const updateMyAgentProfile = async (req, res) => {
   try {
+    const requestedUserId = normalizeText(req.params.userId);
+    if (requestedUserId && requestedUserId !== String(req.user.id)) {
+      return res.status(403).json({ error: 'You can only update your own profile.' });
+    }
+
     const user = await User.findById(req.user.id);
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
@@ -292,6 +311,15 @@ export const updateMyAgentProfile = async (req, res) => {
     const email = normalizeText(req.body.email).toLowerCase();
     const rawBusinessType = normalizeText(req.body.businessType).toLowerCase();
     const profileImage = normalizeText(req.body.profileImage);
+    const phone = normalizeText(req.body.phone || req.body.mobileNumber);
+    const dateOfBirth = normalizeText(req.body.dateOfBirth);
+    const companyName = normalizeText(req.body.companyName);
+    const buildingNumber = normalizeText(req.body.buildingNumber);
+    const city = normalizeText(req.body.city);
+    const postCode = normalizeText(req.body.postCode);
+    const state = normalizeText(req.body.state);
+    const streetAddress = normalizeText(req.body.streetAddress);
+    const streetName = normalizeText(req.body.streetName);
     const supportingDocument1 = normalizeText(req.body.supportingDocument1);
     const supportingDocument2 = normalizeText(req.body.supportingDocument2);
 
@@ -326,6 +354,42 @@ export const updateMyAgentProfile = async (req, res) => {
       user.profileImage = profileImage;
     }
 
+    if (phone) {
+      user.phone = phone;
+    }
+
+    if (dateOfBirth) {
+      user.dateOfBirth = dateOfBirth;
+    }
+
+    if (companyName) {
+      user.companyName = companyName;
+    }
+
+    if (buildingNumber) {
+      user.buildingNumber = buildingNumber;
+    }
+
+    if (city) {
+      user.city = city;
+    }
+
+    if (postCode) {
+      user.postCode = postCode;
+    }
+
+    if (state) {
+      user.state = state;
+    }
+
+    if (streetAddress) {
+      user.streetAddress = streetAddress;
+    }
+
+    if (streetName) {
+      user.streetName = streetName;
+    }
+
     if (supportingDocument1 || supportingDocument2) {
       const existingDocuments = (user.documents || []).reduce((acc, doc) => {
         acc[String(doc.label || '').toLowerCase()] = doc;
@@ -353,6 +417,47 @@ export const updateMyAgentProfile = async (req, res) => {
       message: 'Profile updated successfully.',
       profile: buildAgentProfileResponse(profile)
     });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const changeMyPassword = async (req, res) => {
+  try {
+    const currentPassword = normalizeText(req.body.currentPassword);
+    const newPassword = normalizeText(req.body.newPassword);
+    const confirmPassword = normalizeText(req.body.confirmPassword);
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ error: 'currentPassword, newPassword and confirmPassword are required.' });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ error: 'newPassword and confirmPassword must match.' });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ error: 'newPassword must be different from currentPassword.' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    if (user.role !== 'agent') {
+      return res.status(403).json({ error: 'Agent profile access only.' });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+    return res.json({ message: 'Password changed successfully.' });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
