@@ -138,6 +138,23 @@ Example body:
 }
 ```
 
+### Add Profile Document
+
+- Endpoint: `POST /api/profile/documents`
+- Access: agent only
+- Required fields:
+  - `documentName`
+  - `fileUrl`
+
+Example body:
+
+```json
+{
+  "documentName": "Passport",
+  "fileUrl": "/uploads/passport.pdf"
+}
+```
+
 ### Admin Login
 
 - Endpoint: `POST /auth/admin/login`

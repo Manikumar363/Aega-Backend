@@ -23,6 +23,12 @@ const buildAgentProfileResponse = (user) => ({
   state: user.state || null,
   streetAddress: user.streetAddress || null,
   streetName: user.streetName || null,
+  documents: (user.documents || []).map((doc) => ({
+    documentName: doc.label,
+    fileUrl: doc.path,
+    originalName: doc.originalName || null,
+    uploadedAt: doc.uploadedAt || null
+  })),
   supportingDocuments: (user.documents || []).map((doc) => ({
     label: doc.label,
     path: doc.path
@@ -458,6 +464,51 @@ export const changeMyPassword = async (req, res) => {
     await user.save();
 
     return res.json({ message: 'Password changed successfully.' });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const addMyProfileDocument = async (req, res) => {
+  try {
+    const requestedUserId = normalizeText(req.params.userId);
+    if (requestedUserId && requestedUserId !== String(req.user.id)) {
+      return res.status(403).json({ error: 'You can only update your own profile.' });
+    }
+
+    const documentName = normalizeText(req.body.documentName);
+    const fileUrl = normalizeText(req.body.fileUrl);
+
+    if (!documentName || !fileUrl) {
+      return res.status(400).json({ error: 'documentName and fileUrl are required.' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    if (user.role !== 'agent') {
+      return res.status(403).json({ error: 'Agent profile access only.' });
+    }
+
+    const nextDocuments = Array.isArray(user.documents) ? [...user.documents] : [];
+    nextDocuments.push({
+      label: documentName,
+      originalName: fileUrl.split('/').pop() || null,
+      mimeType: null,
+      size: null,
+      path: fileUrl
+    });
+
+    user.documents = nextDocuments;
+    await user.save();
+
+    const profile = await User.findById(user._id).select('-password');
+    return res.status(201).json({
+      message: 'Document added successfully.',
+      profile: buildAgentProfileResponse(profile)
+    });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
