@@ -138,6 +138,56 @@ Example body:
 }
 ```
 
+## Public Complaint API
+
+### Submit Complaint (Public)
+
+- Endpoint: `POST /api/complaints/public`
+- Access: public (no auth)
+- Required fields:
+  - `firstName`
+  - `lastName`
+  - `emailAddress`
+  - `phoneNumber`
+  - `countryOfResidence`
+  - `agentNameOrCompany`
+  - `typeOfComplaint`
+  - `description`
+  - `acceptedDeclaration` (must be `true`)
+
+Optional fields:
+
+- `aegaReferenceNumber`
+- `evidenceFiles`: array of `{ "fileUrl": "...", "fileName": "..." }`
+
+Example body:
+
+```json
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "emailAddress": "john.doe@example.com",
+  "phoneNumber": "+1 123 456 7890",
+  "countryOfResidence": "India",
+  "agentNameOrCompany": "ABC Agency",
+  "aegaReferenceNumber": "AEGA-REF-001",
+  "typeOfComplaint": "Misleading Information",
+  "description": "Detailed complaint description goes here.",
+  "evidenceFiles": [
+    {
+      "fileUrl": "/uploads/complaints/evidence-1.pdf",
+      "fileName": "receipt.pdf"
+    }
+  ],
+  "acceptedDeclaration": true
+}
+```
+
+### Get Complaints (Admin)
+
+- Endpoint: `GET /api/complaints/admin`
+- Access: admin only
+
 ### Add Profile Document
 
 - Endpoint: `POST /api/profile/documents`
