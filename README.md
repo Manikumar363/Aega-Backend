@@ -83,6 +83,42 @@ Example request body:
   - `email`
   - `password`
 
+## Agent Profile API
+
+These endpoints are for authenticated agent users (b2b/b2c) to view and update their own profile.
+
+### Get My Profile
+
+- Endpoint: `GET /api/profile/me`
+- Access: agent only
+
+### Update My Profile
+
+- Endpoint: `PUT /api/profile/me`
+- Access: agent only
+- Updatable fields:
+  - `firstName`
+  - `lastName`
+  - `email`
+  - `businessType` (`b2b` or `b2c`)
+  - `profileImage` (image URL/path)
+  - `supportingDocument1` (URL/path)
+  - `supportingDocument2` (URL/path)
+
+Example body:
+
+```json
+{
+  "firstName": "Arun",
+  "lastName": "Kumar",
+  "email": "arun.b2b@example.com",
+  "businessType": "b2b",
+  "profileImage": "/uploads/profile-arun.png",
+  "supportingDocument1": "/uploads/doc1-updated.pdf",
+  "supportingDocument2": "/uploads/doc2-updated.pdf"
+}
+```
+
 ### Admin Login
 
 - Endpoint: `POST /auth/admin/login`

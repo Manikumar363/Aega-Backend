@@ -3,6 +3,24 @@ import jwt from 'jsonwebtoken';
 import User from '../models/user.js';
 import AgentProfile from '../models/agentProfile.js';
 
+const normalizeText = (value) => String(value || '').trim();
+
+const buildAgentProfileResponse = (user) => ({
+  id: user._id,
+  firstName: user.firstName,
+  lastName: user.lastName,
+  name: user.name,
+  email: user.email,
+  role: user.role,
+  businessType: user.businessType || null,
+  profileImage: user.profileImage || null,
+  supportingDocuments: (user.documents || []).map((doc) => ({
+    label: doc.label,
+    path: doc.path
+  })),
+  createdAt: user.createdAt
+});
+
 const buildAuthToken = (user) => {
   return jwt.sign(
     { id: user._id, email: user.email, role: user.role, businessType: user.businessType || null },
@@ -152,6 +170,7 @@ export const signupUser = async (req, res) => {
       password,
       role: normalizedRole,
       businessType: normalizedBusinessType,
+      profileImage: normalizeText(req.body.profileImage) || null,
       documents
     });
 
@@ -168,6 +187,7 @@ export const signupUser = async (req, res) => {
         email: user.email,
         role: user.role,
         businessType: user.businessType,
+        profileImage: user.profileImage || null,
         supportingDocuments: user.documents.map((doc) => doc.path)
       }
     });
@@ -192,7 +212,8 @@ export const loginUser = async (req, res) => {
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
-      role: user.role
+      role: user.role,
+      profileImage: user.profileImage || null
     };
 
     if (user.role === 'agent') {
@@ -235,6 +256,105 @@ export const loginAdmin = async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+export const getMyAgentProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    if (user.role !== 'agent') {
+      return res.status(403).json({ error: 'Agent profile access only.' });
+    }
+
+    return res.json(buildAgentProfileResponse(user));
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const updateMyAgentProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    if (user.role !== 'agent') {
+      return res.status(403).json({ error: 'Agent profile access only.' });
+    }
+
+    const firstName = normalizeText(req.body.firstName);
+    const lastName = normalizeText(req.body.lastName);
+    const email = normalizeText(req.body.email).toLowerCase();
+    const rawBusinessType = normalizeText(req.body.businessType).toLowerCase();
+    const profileImage = normalizeText(req.body.profileImage);
+    const supportingDocument1 = normalizeText(req.body.supportingDocument1);
+    const supportingDocument2 = normalizeText(req.body.supportingDocument2);
+
+    if (email && email !== user.email) {
+      const existing = await User.findOne({ email, _id: { $ne: user._id } });
+      if (existing) {
+        return res.status(409).json({ error: 'Another user already exists with this email.' });
+      }
+      user.email = email;
+    }
+
+    if (firstName) {
+      user.firstName = firstName;
+    }
+
+    if (lastName) {
+      user.lastName = lastName;
+    }
+
+    if (user.firstName || user.lastName) {
+      user.name = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+    }
+
+    if (rawBusinessType) {
+      if (!['b2b', 'b2c'].includes(rawBusinessType)) {
+        return res.status(400).json({ error: 'businessType must be b2b or b2c.' });
+      }
+      user.businessType = rawBusinessType;
+    }
+
+    if (profileImage) {
+      user.profileImage = profileImage;
+    }
+
+    if (supportingDocument1 || supportingDocument2) {
+      const existingDocuments = (user.documents || []).reduce((acc, doc) => {
+        acc[String(doc.label || '').toLowerCase()] = doc;
+        return acc;
+      }, {});
+
+      const doc1 = supportingDocument1 || existingDocuments.supportingdocument1?.path || '';
+      const doc2 = supportingDocument2 || existingDocuments.supportingdocument2?.path || '';
+
+      user.documents = [doc1, doc2]
+        .filter(Boolean)
+        .map((documentPath, index) => ({
+          label: `supportingDocument${index + 1}`,
+          originalName: documentPath.split('/').pop() || null,
+          mimeType: null,
+          size: null,
+          path: documentPath
+        }));
+    }
+
+    await user.save();
+
+    const profile = await User.findById(user._id).select('-password');
+    return res.json({
+      message: 'Profile updated successfully.',
+      profile: buildAgentProfileResponse(profile)
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
 };
 
