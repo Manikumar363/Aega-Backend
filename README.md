@@ -188,6 +188,224 @@ Example body:
 - Endpoint: `GET /api/complaints/admin`
 - Access: admin only
 
+## Student Management API
+
+### Add Student
+
+- Endpoint: `POST /api/students`
+- Access: authenticated agent
+- Required fields:
+  - `firstName`
+  - `lastName`
+  - `emailId` (or `email`)
+  - `mobileNumber` (or `phoneNumber`)
+
+Optional sections (arrays):
+
+- `tenthInformation`
+- `twelfthInformation`
+- `graduationInformation`
+- `postGraduationInformation`
+- `employmentInformation`
+- `preferredRegionAndCollege`
+
+Example body:
+
+```json
+{
+  "firstName": "Jane",
+  "lastName": "Lorence",
+  "emailId": "jane@gmail.com",
+  "mobileNumber": "+1 123 589 6740",
+  "tenthInformation": [
+    {
+      "schoolName": "School Name",
+      "boardName": "Board Name",
+      "percentage": "82.33%",
+      "yearOfPassing": "2019"
+    }
+  ],
+  "graduationInformation": [
+    {
+      "schoolOrCollege": "School Name",
+      "streamOrSpecialization": "Stream",
+      "cgpaOrPercentage": "82.33%",
+      "yearOfPassing": "2022"
+    }
+  ],
+  "postGraduationInformation": [
+    {
+      "schoolOrCollege": "School Name",
+      "streamOrSpecialization": "Stream",
+      "cgpaOrPercentage": "82.33%",
+      "yearOfPassing": "2024"
+    }
+  ],
+  "employmentInformation": [
+    {
+      "companyName": "XYZ",
+      "role": "Designer",
+      "emailId": "jane@gmail.com",
+      "phoneNumber": "+1 123 589 6740",
+      "startDate": "2024",
+      "endDate": "2025",
+      "currentlyWorkingHere": false
+    }
+  ],
+  "preferredRegionAndCollege": [
+    {
+      "region": "XYZ",
+      "country": "India",
+      "collegeName": "Name"
+    }
+  ]
+}
+```
+
+### Get All Students
+
+- Endpoint: `GET /api/students`
+- Access: authenticated user
+- Behavior:
+  - agent sees own students
+  - admin sees all students
+
+### Get Student By ID
+
+- Endpoint: `GET /api/students/:studentId`
+- Access: authenticated user
+- Behavior:
+  - agent can view own student only
+  - admin can view any student
+
+### Edit Student
+
+- Endpoint: `PUT /api/students/:studentId`
+- Access: authenticated user (owner agent or admin)
+- Restriction:
+  - `emailId` cannot be changed during edit.
+
+Example body:
+
+```json
+{
+  "firstName": "Jane",
+  "lastName": "Updated",
+  "mobileNumber": "+1 111 222 3333",
+  "graduationInformation": [
+    {
+      "schoolOrCollege": "School Name",
+      "streamOrSpecialization": "Stream",
+      "cgpaOrPercentage": "85%",
+      "yearOfPassing": "2023"
+    }
+  ]
+}
+```
+
+### Delete Student
+
+- Endpoint: `DELETE /api/students/:studentId`
+- Access: authenticated user (owner agent or admin)
+- Mail restriction:
+  - If `emailId` or `email` is sent in request body, it must match the student's saved email.
+
+Example body (optional verification):
+
+```json
+{
+  "emailId": "jane@gmail.com"
+}
+```
+
+### Add University Preference
+
+- Endpoint: `POST /api/students/:studentId/preferences`
+- Access: authenticated user (owner agent or admin)
+- Required fields:
+  - `universityName`
+
+Example body:
+
+```json
+{
+  "universityName": "Loughborough University",
+  "courseName": "MSC Human-Computer Interaction",
+  "region": "East Midlands",
+  "country": "United Kingdom",
+  "location": "Loughborough",
+  "eligibilityStatus": "Eligible",
+  "applicationStatus": "On-Going",
+  "intakeDate": "September 2026",
+  "startDate": "2026-09-21",
+  "endDate": "2027-09-21",
+  "tuitionFee": "£27,300",
+  "firstTermFee": "£4,300",
+  "logoUrl": "https://example.com/logo.png",
+  "universityEmail": "admissions@lboro.ac.uk"
+}
+```
+
+### Get University Preferences
+
+- Endpoint: `GET /api/students/:studentId/preferences`
+- Access: authenticated user (owner agent or admin)
+- Response: Array of all university preferences for the student
+
+### Edit University Preference
+
+- Endpoint: `PUT /api/students/:studentId/preferences/:preferenceId`
+- Access: authenticated user (owner agent or admin)
+- Fields: All preference fields are optional and can be updated
+
+Example body:
+
+```json
+{
+  "applicationStatus": "Accepted",
+  "eligibilityStatus": "Conditional Offer"
+}
+```
+
+### Reorder University Preferences
+
+- Endpoint: `PUT /api/students/:studentId/preferences/reorder`
+- Access: authenticated user (owner agent or admin)
+- Body: `orderedPreferenceIds` — an array of preference `_id` values in the desired order. The array length must exactly match the existing preferences length.
+
+Example body:
+
+```json
+{
+  "orderedPreferenceIds": [
+    "64e8c3d4f8f9a1b2c3d4e5f6",
+    "64e8c3d4f8f9a1b2c3d4e5f7",
+    "64e8c3d4f8f9a1b2c3d4e5f8"
+  ]
+}
+```
+
+Alternative (single-move) body — move one preference to a new position (1-based indices):
+
+```json
+{
+  "id": "6954f467b3e301509184d93f",
+  "from": 3,
+  "to": 1
+}
+```
+
+Notes:
+
+- `from` and `to` are 1-based positions (example: `from:3` moves the item currently at position 3).
+- The server validates the `id` belongs to the student and the `to` index is within range.
+
+### Delete University Preference
+
+- Endpoint: `DELETE /api/students/:studentId/preferences/:preferenceId`
+- Access: authenticated user (owner agent or admin)
+- Response: Success message upon deletion
+
 ### Add Profile Document
 
 - Endpoint: `POST /api/profile/documents`
@@ -499,5 +717,107 @@ Example body:
 
 - Endpoint: `DELETE /api/agent-management/:agentId`
 - Access: authenticated b2b/b2c agent with `removeAgent` permission
+
+## University Management API
+
+Universities can self-register and manage their own profiles. Agents and admins can view the list of available universities when adding student preferences.
+
+### List All Active Universities (Public)
+
+- Endpoint: `GET /api/universities`
+- Access: public (no auth required)
+- Response: Array of all active universities with basic info (name, email, region, country, logo, coursesOffered)
+
+Example response:
+
+```json
+[
+  {
+    "_id": "64e8c3d4f8f9a1b2c3d4e5f6",
+    "name": "Loughborough University",
+    "email": "admissions@lboro.ac.uk",
+    "region": "East Midlands",
+    "country": "United Kingdom",
+    "logo": "/uploads/lboro-logo.png",
+    "coursesOffered": ["MSC Human-Computer Interaction", "MSC Computer Science"]
+  }
+]
+```
+
+### Get University Details
+
+- Endpoint: `GET /api/universities/:universityId`
+- Access: public
+- Response: Full university profile
+
+### Create University Profile (First Time Setup)
+
+- Endpoint: `POST /api/universities/me/profile`
+- Access: authenticated university user
+- Required fields:
+  - `name`
+  - `email`
+
+Optional fields:
+
+- `phone`
+- `website`
+- `region`
+- `country`
+- `city`
+- `logo`
+- `accreditation`
+- `coursesOffered` (array)
+- `description`
+
+Example body:
+
+```json
+{
+  "name": "Loughborough University",
+  "email": "admissions@lboro.ac.uk",
+  "phone": "+44 1509 263171",
+  "website": "https://www.lboro.ac.uk",
+  "region": "East Midlands",
+  "country": "United Kingdom",
+  "city": "Loughborough",
+  "logo": "/uploads/lboro-logo.png",
+  "accreditation": "Russell Group",
+  "coursesOffered": [
+    "MSC Human-Computer Interaction",
+    "MSC Computer Science",
+    "MSC Mechanical Engineering"
+  ],
+  "description": "A leading research university in the UK"
+}
+```
+
+### Get My University Profile
+
+- Endpoint: `GET /api/universities/me/profile`
+- Access: authenticated university user
+- Response: Full profile of the authenticated university
+
+### Update My University Profile
+
+- Endpoint: `PUT /api/universities/:universityId`
+- Access: authenticated university user (profile owner or admin)
+- Updatable fields: name, phone, website, region, country, city, logo, accreditation, coursesOffered, description, status (admin only)
+
+Example body:
+
+```json
+{
+  "phone": "+44 1509 263172",
+  "coursesOffered": [
+    "MSC Human-Computer Interaction",
+    "MSC Computer Science",
+    "MSC Mechanical Engineering",
+    "MSC Biomedical Engineering"
+  ]
+}
+```
+
+---
 
 Replace placeholders and add more features as needed.

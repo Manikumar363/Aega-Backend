@@ -13,6 +13,9 @@ import cdpRoutes from './routes/cdp.js';
 import cdpAdminRoutes from './routes/cdpAdmin.js';
 import agentAdminRoutes from './routes/agentAdmin.js';
 import complaintRoutes from './routes/complaint.js';
+import studentRoutes from './routes/student.js';
+import universityRoutes from './routes/university.js';
+import officeRoutes from './routes/office.js';
 import { createAdminUser, createTestUser } from './controllers/userController.js';
 
 dotenv.config();
@@ -77,6 +80,9 @@ app.use('/api/cdp-courses', cdpRoutes);
 app.use('/api/admin/cdp-courses', cdpAdminRoutes);
 app.use('/api/agent-management', agentAdminRoutes);
 app.use('/api/complaints', complaintRoutes);
+app.use('/api/students', studentRoutes);
+app.use('/api/universities', universityRoutes);
+app.use('/api/offices', officeRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
