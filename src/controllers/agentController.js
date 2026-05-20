@@ -71,7 +71,7 @@ export const createAgent = async (req, res) => {
       name: `${payload.firstName} ${payload.lastName}`.trim(),
       email: payload.emailId,
       password: generatedPassword,
-      role: 'agent',
+      role: 'counsellor',
       businessType: req.user.businessType || null
     });
 
@@ -111,7 +111,7 @@ export const createAgent = async (req, res) => {
       emailError = error.message;
     }
 
-    return res.status(201).json({
+    const baseResponse = {
       message: emailSent
         ? 'Agent created successfully and credentials email sent.'
         : 'Agent created successfully, but credential email could not be sent.',
@@ -131,7 +131,18 @@ export const createAgent = async (req, res) => {
         sent: emailSent,
         error: emailError
       }
-    });
+    };
+
+    // If email couldn't be sent, include plaintext credentials in response so the creator
+    // can copy them and share with the counsellor manually.
+    if (!emailSent) {
+      baseResponse.credentials = {
+        email: payload.emailId,
+        password: generatedPassword
+      };
+    }
+
+    return res.status(201).json(baseResponse);
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -250,6 +261,37 @@ export const deleteAgent = async (req, res) => {
     ]);
 
     return res.json({ message: 'Agent deleted successfully.' });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const getAllAgentsForAdmin = async (req, res) => {
+  try {
+    const agents = await AgentProfile.find()
+      .sort({ createdAt: -1 })
+      .populate('userId', 'name email role businessType createdAt')
+      .populate('createdBy', 'name email role businessType');
+
+    return res.json(
+      agents.map((agent) => buildAgentResponse(agent, agent.userId))
+    );
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const getAgentByIdForAdmin = async (req, res) => {
+  try {
+    const agent = await AgentProfile.findById(req.params.agentId)
+      .populate('userId', 'name email role businessType createdAt')
+      .populate('createdBy', 'name email role businessType');
+
+    if (!agent) {
+      return res.status(404).json({ error: 'Agent not found.' });
+    }
+
+    return res.json(buildAgentResponse(agent, agent.userId));
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

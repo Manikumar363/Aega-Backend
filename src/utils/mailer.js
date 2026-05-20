@@ -69,3 +69,27 @@ export const sendAgentCredentialsEmail = async ({ email, fullName, password }) =
 
   return transporter.sendMail(mailOptions);
 };
+
+export const sendComplaintReplyEmail = async ({ email, fullName, complaintReference, replyMessage }) => {
+  const appName = process.env.APP_NAME || 'AEGA';
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+    to: email,
+    subject: `${appName} Complaint Reply${complaintReference ? ` - ${complaintReference}` : ''}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #333;">Complaint Reply from ${appName}</h2>
+        <p>Hi ${fullName},</p>
+        <p>We have replied to your complaint${complaintReference ? ` (${complaintReference})` : ''}.</p>
+        <div style="background-color: #f7f7f7; padding: 16px; border-radius: 6px; margin: 16px 0; white-space: pre-wrap;">
+          ${replyMessage}
+        </div>
+        <p>If you have further concerns, please reply to this email or contact our support team.</p>
+        <hr style="border: none; border-top: 1px solid #ddd; margin: 24px 0;">
+        <p style="color: #666; font-size: 12px;">This is an automated email. Please do not reply.</p>
+      </div>
+    `
+  };
+
+  return transporter.sendMail(mailOptions);
+};

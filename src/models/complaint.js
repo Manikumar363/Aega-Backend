@@ -21,6 +21,9 @@ const complaintSchema = new mongoose.Schema({
   evidenceFiles: { type: [complaintEvidenceSchema], default: [] },
   acceptedDeclaration: { type: Boolean, required: true },
   status: { type: String, enum: ['submitted', 'in-review', 'resolved', 'rejected'], default: 'submitted' },
+  replyMessage: { type: String, default: null, trim: true },
+  repliedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  repliedAt: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now }
 });
 

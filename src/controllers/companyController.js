@@ -108,6 +108,37 @@ export const getCompanyOverview = async (req, res) => {
   }
 };
 
+export const getCompanyByIdForAdmin = async (req, res) => {
+  try {
+    const company = await Company.findById(req.params.companyId)
+      .populate('agentId', 'firstName lastName name email role businessType');
+
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found.' });
+    }
+
+    return res.json({
+      info: {
+        id: company._id,
+        companyName: company.companyName,
+        founderName: company.founderName,
+        emailId: company.emailId,
+        mobileNumber: company.mobileNumber,
+        designation: company.designation,
+        office: company.office,
+        country: company.country,
+        companyDocument1: company.companyDocument1,
+        companyDocument2: company.companyDocument2,
+        createdAt: company.createdAt
+      },
+      agent: company.agentId,
+      performanceMatrix: company.performanceMatrix
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
 export const updateCompanyPerformance = async (req, res) => {
   try {
     const company = await Company.findById(req.params.companyId);

@@ -54,6 +54,7 @@ Basic Node.js backend setup with Express and MongoDB (Mongoose).
   - `password`
   - `confirmPassword`
   - `role` (`agent` or `university`)
+    - `role` (`agent`, `counsellor` or `university`)
   - `businessType` (`b2b` or `b2c`) only when `role=agent` (must not be sent for `role=university`)
 - Required document URL fields:
   - `supportingDocument1` (string path returned by upload API, for example `/uploads/file1.pdf`)
@@ -187,6 +188,21 @@ Example body:
 
 - Endpoint: `GET /api/complaints/admin`
 - Access: admin only
+
+### Reply to Complaint (Admin)
+
+- Endpoint: `POST /api/complaints/admin/:complaintId/reply`
+- Access: admin only
+- Body (required): `replyMessage`
+- Result: saves the reply on the complaint record and sends an email to the complainant's submitted email address
+
+Example body:
+
+```json
+{
+  "replyMessage": "We have reviewed your complaint and will contact you shortly with the next steps."
+}
+```
 
 ## Student Management API
 
@@ -717,6 +733,98 @@ Example body:
 
 - Endpoint: `DELETE /api/agent-management/:agentId`
 - Access: authenticated b2b/b2c agent with `removeAgent` permission
+
+## Admin GET APIs
+
+### Agent Management (Admin)
+
+- `GET /api/admin/agent-management`
+- `GET /api/admin/agent-management/:agentId`
+
+### Company Management (Admin)
+
+- `GET /api/admin/companies`
+- `GET /api/admin/companies/:companyId`
+
+### Student Management (Admin)
+
+- `GET /api/admin/students`
+- `GET /api/admin/students/:studentId`
+
+The student detail route also allows admins on the existing non-admin path:
+
+- `GET /api/students/:studentId`
+
+Notes:
+
+- These routes require an admin Bearer token.
+- The existing non-admin routes still work for agents where applicable.
+
+Example auth header:
+
+```http
+Authorization: Bearer <admin-token>
+```
+
+## Leave Management API
+
+Counsellors can submit leave requests. Their parent B2B/B2C agent can view and accept/reject those requests.
+
+### Submit Leave Request (Counsellor)
+
+- Endpoint: `POST /api/leaves`
+- Access: authenticated counsellor
+- Required fields:
+  - `leaveType`
+  - `startDate`
+  - `endDate`
+  - `title`
+  - `reason`
+
+Example body:
+
+```json
+{
+  "leaveType": "Casual Leave",
+  "startDate": "2026-05-20",
+  "endDate": "2026-05-22",
+  "title": "Family function",
+  "reason": "Need to attend a family event in my hometown."
+}
+```
+
+### My Leave Requests (Counsellor)
+
+- Endpoint: `GET /api/leaves/me`
+- Access: authenticated counsellor
+
+### Team Leave Requests (Parent Agent / Admin)
+
+- Endpoint: `GET /api/leaves/team`
+- Access: authenticated agent or admin
+- Returns all leave requests for the logged-in B2B/B2C agent's counsellors. Admin can see all.
+
+### Accept Leave Request
+
+- Endpoint: `PUT /api/leaves/:leaveId/accept`
+- Access: authenticated agent or admin
+- Optional body:
+  - `reviewNote`
+
+### Reject Leave Request
+
+- Endpoint: `PUT /api/leaves/:leaveId/reject`
+- Access: authenticated agent or admin
+- Optional body:
+  - `reviewNote`
+
+Example body:
+
+```json
+{
+  "reviewNote": "Approved, please hand over pending tasks before leave starts."
+}
+```
 
 ## University Management API
 

@@ -25,10 +25,27 @@ export const requireAgentRole = (req, res, next) => {
   return next();
 };
 
+export const requireCounsellorRole = (req, res, next) => {
+  if (!req.user || req.user.role !== 'counsellor') {
+    return res.status(403).json({ error: 'Counsellor access required.' });
+  }
+
+  return next();
+};
+
 export const requireAdminRole = (req, res, next) => {
   const role = req.user?.role;
   if (role !== 'admin') {
     return res.status(403).json({ error: 'Admin access required.' });
+  }
+
+  return next();
+};
+
+export const requireAgentOrAdminRole = (req, res, next) => {
+  const role = req.user?.role;
+  if (role !== 'agent' && role !== 'admin') {
+    return res.status(403).json({ error: 'Agent or admin access required.' });
   }
 
   return next();

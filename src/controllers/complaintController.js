@@ -1,4 +1,5 @@
 import Complaint from '../models/complaint.js';
+import { sendComplaintReplyEmail } from '../utils/mailer.js';
 
 const normalizeText = (value) => String(value || '').trim();
 
@@ -78,6 +79,54 @@ export const getComplaints = async (_req, res) => {
   try {
     const complaints = await Complaint.find().sort({ createdAt: -1 });
     return res.json(complaints);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const replyToComplaint = async (req, res) => {
+  try {
+    const complaint = await Complaint.findById(req.params.complaintId);
+    if (!complaint) {
+      return res.status(404).json({ error: 'Complaint not found.' });
+    }
+
+    const replyMessage = normalizeText(req.body.replyMessage || req.body.message);
+    if (!replyMessage) {
+      return res.status(400).json({ error: 'replyMessage is required.' });
+    }
+
+    let emailSent = true;
+    let emailError = null;
+
+    try {
+      await sendComplaintReplyEmail({
+        email: complaint.emailAddress,
+        fullName: `${complaint.firstName} ${complaint.lastName}`.trim(),
+        complaintReference: complaint.aegaReferenceNumber || complaint._id,
+        replyMessage
+      });
+    } catch (error) {
+      emailSent = false;
+      emailError = error.message;
+    }
+
+    complaint.replyMessage = replyMessage;
+    complaint.repliedBy = req.user.id;
+    complaint.repliedAt = new Date();
+    complaint.status = 'resolved';
+    await complaint.save();
+
+    return res.status(200).json({
+      message: emailSent
+        ? 'Complaint replied successfully and email sent.'
+        : 'Complaint reply saved, but email could not be sent.',
+      complaint,
+      email: {
+        sent: emailSent,
+        error: emailError
+      }
+    });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
