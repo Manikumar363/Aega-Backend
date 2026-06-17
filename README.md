@@ -193,6 +193,38 @@ Example body:
 
 - Endpoint: `POST /api/complaints/admin/:complaintId/reply`
 - Access: admin only
+- Body:
+  - `replyMessage`
+
+### University Requests (Agent -> University)
+
+- Endpoint: `POST /api/agent-management/universities`
+- Access: authenticated agent
+- Body:
+  - `universityId`
+  - `message` (optional)
+  - Requires `assignUni: true` permission
+
+- Endpoint: `GET /api/agent-management/universities`
+- Access: authenticated agent
+
+- Endpoint: `GET /api/university-requests/university`
+- Access: authenticated university
+
+- Endpoint: `PUT /api/university-requests/:requestId/accept`
+- Access: authenticated university
+- Body:
+  - `reviewNote` (optional)
+
+- Endpoint: `PUT /api/university-requests/:requestId/reject`
+- Access: authenticated university
+- Body:
+  - `reviewNote` (optional)
+
+### Reply to Complaint (Admin)
+
+- Endpoint: `POST /api/complaints/admin/:complaintId/reply`
+- Access: admin only
 - Body (required): `replyMessage`
 - Result: saves the reply on the complaint record and sends an email to the complainant's submitted email address
 

@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import User from '../models/user.js';
 import AgentProfile from '../models/agentProfile.js';
+import University from '../models/university.js';
 
 const normalizeText = (value) => String(value || '').trim();
 
@@ -133,6 +134,8 @@ export const signupUser = async (req, res) => {
     const {
       firstName,
       lastName,
+      universityName,
+      companyName,
       email,
       password,
       confirmPassword,
@@ -140,8 +143,8 @@ export const signupUser = async (req, res) => {
       businessType
     } = req.body;
 
-    if (!firstName || !lastName || !email || !password || !confirmPassword || !role) {
-      return res.status(400).json({ error: 'firstName, lastName, email, password, confirmPassword and role are required.' });
+    if (!email || !password || !confirmPassword || !role) {
+      return res.status(400).json({ error: 'email, password, confirmPassword and role are required.' });
     }
 
     if (password !== confirmPassword) {
@@ -157,12 +160,29 @@ export const signupUser = async (req, res) => {
 
     let normalizedBusinessType = null;
     if (normalizedRole === 'agent') {
+      if (!firstName || !lastName) {
+        return res.status(400).json({ error: 'firstName and lastName are required for agent signup.' });
+      }
+
       normalizedBusinessType = rawBusinessType;
       if (!['b2b', 'b2c'].includes(normalizedBusinessType)) {
         return res.status(400).json({ error: 'For role=agent, businessType must be b2b or b2c.' });
       }
     } else if (rawBusinessType) {
       return res.status(400).json({ error: 'businessType is allowed only when role=agent.' });
+    }
+
+    const resolvedUniversityName = normalizeText(universityName || companyName || `${firstName || ''} ${lastName || ''}`).trim();
+    const resolvedDisplayName = normalizedRole === 'university'
+      ? resolvedUniversityName
+      : `${firstName} ${lastName}`.trim();
+
+    if (normalizedRole === 'university' && !resolvedUniversityName) {
+      return res.status(400).json({ error: 'universityName is required for university signup.' });
+    }
+
+    if (normalizedRole === 'agent' && (!firstName || !lastName)) {
+      return res.status(400).json({ error: 'firstName and lastName are required for agent signup.' });
     }
 
     const existing = await User.findOne({ email });
@@ -178,9 +198,9 @@ export const signupUser = async (req, res) => {
     }
 
     const user = new User({
-      firstName,
-      lastName,
-      name: `${firstName} ${lastName}`.trim(),
+      firstName: normalizedRole === 'agent' ? firstName : null,
+      lastName: normalizedRole === 'agent' ? lastName : null,
+      name: resolvedDisplayName || email,
       email,
       password,
       role: normalizedRole,
@@ -191,6 +211,19 @@ export const signupUser = async (req, res) => {
 
     await user.save();
 
+    if (normalizedRole === 'university') {
+      const existingUniversity = await University.findOne({ userId: user._id });
+      if (!existingUniversity) {
+        await University.create({
+          userId: user._id,
+          createdBy: user._id,
+          name: resolvedUniversityName,
+          email: user.email,
+          status: 'pending'
+        });
+      }
+    }
+
     const token = buildAuthToken(user);
     res.status(201).json({
       message: 'Signup successful',
@@ -199,6 +232,7 @@ export const signupUser = async (req, res) => {
         id: user._id,
         firstName: user.firstName,
         lastName: user.lastName,
+        universityName: normalizedRole === 'university' ? resolvedUniversityName : null,
         email: user.email,
         role: user.role,
         businessType: user.businessType,

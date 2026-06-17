@@ -2,6 +2,8 @@ import crypto from 'crypto';
 import User from '../models/user.js';
 import AgentProfile from '../models/agentProfile.js';
 import { sendAgentCredentialsEmail } from '../utils/mailer.js';
+import University from '../models/university.js';
+import UniversityRequest from '../models/universityRequest.js';
 
 const normalizeText = (value) => String(value || '').trim();
 
@@ -35,6 +37,182 @@ const normalizeAuthorization = (authorizationPayload, existingAuthorization = {}
     )
   };
 };
+
+export const createUniversityRequest = async (req, res) => {
+  try {
+    const universityId = normalizeText(req.body.universityId);
+    const universityName = normalizeText(req.body.name || req.body.universityName);
+    const message = normalizeText(req.body.message || req.body.note);
+
+    if (!universityId && !universityName) {
+      return res.status(400).json({ error: 'universityId or name is required.' });
+    }
+
+    const university = universityId
+      ? await University.findById(universityId)
+      : await University.findOne({ name: universityName });
+
+    if (!university) {
+      return res.status(404).json({ error: 'University not found.' });
+    }
+
+    const existingPending = await UniversityRequest.findOne({
+      agentId: req.user.id,
+      universityId: university._id,
+      status: 'pending'
+    });
+
+    if (existingPending) {
+      return res.status(409).json({ error: 'A pending request already exists for this university.' });
+    }
+
+    const universityRequest = new UniversityRequest({
+      agentId: req.user.id,
+      agentRole: req.user.role,
+      agentBusinessType: req.user.businessType || null,
+      universityId: university._id,
+      universityName: university.name,
+      universityEmail: university.email,
+      message: message || null
+    });
+
+    await universityRequest.save();
+
+    return res.status(201).json({
+      message: 'University request submitted successfully.',
+      request: universityRequest
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const getMyUniversityRequestById = async (req, res) => {
+  try {
+    const request = await UniversityRequest.findOne({
+      _id: req.params.requestId,
+      agentId: req.user.id
+    })
+      .populate('universityId', 'name email region country city logo status')
+      .lean();
+
+    if (!request) {
+      return res.status(404).json({ error: 'University request not found.' });
+    }
+
+    return res.json(request);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const deleteMyUniversityRequest = async (req, res) => {
+  try {
+    const request = await UniversityRequest.findOne({
+      _id: req.params.requestId,
+      agentId: req.user.id
+    });
+
+    if (!request) {
+      return res.status(404).json({ error: 'University request not found.' });
+    }
+
+    if (request.status !== 'pending') {
+      return res.status(400).json({ error: 'Only pending requests can be deleted.' });
+    }
+
+    await UniversityRequest.deleteOne({ _id: request._id });
+
+    return res.json({ message: 'University request deleted successfully.' });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const getMyUniversityRequests = async (req, res) => {
+  try {
+    const requests = await UniversityRequest.find({ agentId: req.user.id })
+      .sort({ createdAt: -1 })
+      .populate('universityId', 'name email region country city logo status')
+      .lean();
+
+    return res.json(requests);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const getUniversityRequestsForUniversity = async (req, res) => {
+  try {
+    const university = await University.findOne({ userId: req.user.id });
+    if (!university) {
+      return res.status(404).json({ error: 'University profile not found.' });
+    }
+
+    const requests = await UniversityRequest.find({ universityId: university._id })
+      .sort({ createdAt: -1 })
+      .populate('agentId', 'name email role businessType createdAt')
+      .lean();
+
+    return res.json(requests);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const getMyUniversityRequestsForAgent = async (req, res) => {
+  try {
+    const requests = await UniversityRequest.find({ agentId: req.user.id })
+      .sort({ createdAt: -1 })
+      .populate('universityId', 'name email region country city logo status')
+      .lean();
+
+    return res.json(requests);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+const reviewUniversityRequest = async (req, res, status) => {
+  try {
+    const university = await University.findOne({ userId: req.user.id });
+    if (!university) {
+      return res.status(404).json({ error: 'University profile not found.' });
+    }
+
+    const universityRequest = await UniversityRequest.findOne({
+      _id: req.params.requestId,
+      universityId: university._id
+    });
+
+    if (!universityRequest) {
+      return res.status(404).json({ error: 'University request not found.' });
+    }
+
+    if (universityRequest.status !== 'pending') {
+      return res.status(400).json({ error: 'University request has already been reviewed.' });
+    }
+
+    universityRequest.status = status;
+    universityRequest.reviewNote = normalizeText(req.body.reviewNote) || null;
+    universityRequest.reviewedBy = req.user.id;
+    universityRequest.reviewedAt = new Date();
+    universityRequest.updatedAt = new Date();
+
+    await universityRequest.save();
+
+    return res.json({
+      message: `University request ${status} successfully.`,
+      request: universityRequest
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const acceptUniversityRequest = async (req, res) => reviewUniversityRequest(req, res, 'accepted');
+
+export const rejectUniversityRequest = async (req, res) => reviewUniversityRequest(req, res, 'rejected');
 
 export const createAgent = async (req, res) => {
   try {

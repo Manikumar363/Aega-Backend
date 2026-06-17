@@ -20,12 +20,14 @@ import leaveRoutes from './routes/leave.js';
 import adminAgentRoutes from './routes/adminAgent.js';
 import adminCompanyRoutes from './routes/adminCompany.js';
 import adminStudentRoutes from './routes/adminStudent.js';
+import adminUniversityRoutes from './routes/adminUniversity.js';
+import universityRequestRoutes from './routes/universityRequest.js';
 import { createAdminUser, createTestUser } from './controllers/userController.js';
 
 dotenv.config();
 
 const app = express();
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:4000,http://localhost:3000')
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:4000,http://localhost:3000, http://localhost:5173')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
@@ -91,6 +93,8 @@ app.use('/api/universities', universityRoutes);
 app.use('/api/offices', officeRoutes);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/admin/companies', adminCompanyRoutes);
+app.use('/api/admin/universities', adminUniversityRoutes);
+app.use('/api/university-requests', universityRequestRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {

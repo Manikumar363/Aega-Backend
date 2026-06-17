@@ -51,6 +51,20 @@ export const requireAgentOrAdminRole = (req, res, next) => {
   return next();
 };
 
+export const requireUniversityManagementAccess = (req, res, next) => {
+  const role = req.user?.role;
+
+  if (role === 'admin' || role === 'counsellor') {
+    return next();
+  }
+
+  if (role === 'agent' && ['b2b', 'b2c'].includes(req.user?.businessType)) {
+    return next();
+  }
+
+  return res.status(403).json({ error: 'Agent b2b/b2c or counsellor access required.' });
+};
+
 export const requireAgentManagementPermission = (permissionKey) => async (req, res, next) => {
   try {
     if (!req.user || req.user.role !== 'agent') {
@@ -77,4 +91,12 @@ export const requireAgentManagementPermission = (permissionKey) => async (req, r
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
+};
+
+export const requireUniversityRole = (req, res, next) => {
+  if (!req.user || req.user.role !== 'university') {
+    return res.status(403).json({ error: 'University access required.' });
+  }
+
+  return next();
 };
