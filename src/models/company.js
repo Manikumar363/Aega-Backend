@@ -29,6 +29,10 @@ const companySchema = new mongoose.Schema({
     academicWithdrawn: { type: scoreSchema, default: () => ({ max: 75 }) },
     studentOutputSuccess: { type: scoreSchema, default: () => ({ max: 75 }) }
   },
+  complianceScore: { type: Number, default: 100 },
+  numberOfAudits: { type: Number, default: 0 },
+  activeAlerts: { type: Number, default: 0 },
+  riskLevel: { type: String, enum: ['LOW', 'MEDIUM', 'HIGH'], default: 'LOW' },
   createdAt: { type: Date, default: Date.now }
 });
 

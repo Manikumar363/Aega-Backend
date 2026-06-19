@@ -26,6 +26,10 @@ const agentProfileSchema = new mongoose.Schema({
   country: { type: String, required: true, trim: true },
   authorization: { type: authorizationSchema, default: () => ({}) },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  complianceScore: { type: Number, default: 100 },
+  numberOfAudits: { type: Number, default: 0 },
+  activeAlerts: { type: Number, default: 0 },
+  riskLevel: { type: String, enum: ['LOW', 'MEDIUM', 'HIGH'], default: 'LOW' },
   createdAt: { type: Date, default: Date.now }
 });
 

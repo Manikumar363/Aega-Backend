@@ -9,6 +9,8 @@ const complaintEvidenceSchema = new mongoose.Schema(
 );
 
 const complaintSchema = new mongoose.Schema({
+  targetType: { type: String, enum: ['agent', 'company', 'university'], default: null },
+  targetId: { type: String, default: null },
   firstName: { type: String, required: true, trim: true },
   lastName: { type: String, required: true, trim: true },
   emailAddress: { type: String, required: true, trim: true },

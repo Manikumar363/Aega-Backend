@@ -131,3 +131,58 @@ export const replyToComplaint = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
+
+// GET: Fetch complaints for a specific target (agent, company, university)
+export const getTargetComplaints = async (req, res) => {
+  try {
+    const { targetType, targetId } = req.query;
+
+    if (!targetType || !targetId) {
+      return res.status(400).json({ error: 'targetType and targetId query parameters are required.' });
+    }
+
+    const complaints = await Complaint.find({ targetType, targetId }).sort({ createdAt: -1 });
+    return res.json(complaints);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+// POST: Admin raise complaint against a target
+export const raiseTargetComplaint = async (req, res) => {
+  try {
+    const { targetType, targetId, typeOfComplaint, description } = req.body;
+
+    if (!targetType || !targetId || !typeOfComplaint || !description) {
+      return res.status(400).json({ error: 'targetType, targetId, typeOfComplaint, and description are required.' });
+    }
+
+    if (!['agent', 'company', 'university'].includes(targetType.toLowerCase())) {
+      return res.status(400).json({ error: 'targetType must be one of: agent, company, university.' });
+    }
+
+    const complaint = new Complaint({
+      targetType: targetType.toLowerCase(),
+      targetId,
+      firstName: 'Aega',
+      lastName: 'Admin',
+      emailAddress: req.user?.email || 'admin@aega.com',
+      phoneNumber: 'N/A',
+      countryOfResidence: 'N/A',
+      agentNameOrCompany: 'Admin Raised',
+      typeOfComplaint,
+      description,
+      acceptedDeclaration: true,
+      status: 'submitted'
+    });
+
+    await complaint.save();
+
+    return res.status(201).json({
+      message: 'Complaint raised successfully by admin.',
+      data: complaint
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};

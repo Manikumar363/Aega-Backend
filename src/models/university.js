@@ -18,6 +18,10 @@ const universitySchema = new mongoose.Schema({
   reviewNote: { type: String, default: null },
   reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   reviewedAt: { type: Date, default: null },
+  complianceScore: { type: Number, default: 100 },
+  numberOfAudits: { type: Number, default: 0 },
+  activeAlerts: { type: Number, default: 0 },
+  riskLevel: { type: String, enum: ['LOW', 'MEDIUM', 'HIGH'], default: 'LOW' },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
