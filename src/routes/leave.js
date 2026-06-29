@@ -4,7 +4,8 @@ import {
   createLeaveRequest,
   getMyLeaveRequests,
   getTeamLeaveRequests,
-  rejectLeaveRequest
+  rejectLeaveRequest,
+  deleteLeaveRequest
 } from '../controllers/leaveController.js';
 import { requireAuth, requireAgentRole, requireAgentOrAdminRole, requireCounsellorRole } from '../middleware/auth.js';
 
@@ -19,8 +20,11 @@ router.get('/me', requireAuth, requireCounsellorRole, getMyLeaveRequests);
 // Parent agent / admin views all requests from their counsellors
 router.get('/team', requireAuth, requireAgentOrAdminRole, getTeamLeaveRequests);
 
-// Parent agent / admin reviews a request
-router.put('/:leaveId/accept', requireAuth, requireAgentOrAdminRole, acceptLeaveRequest);
-router.put('/:leaveId/reject', requireAuth, requireAgentOrAdminRole, rejectLeaveRequest);
+// Parent agent reviews a request (excluding admin as requested)
+router.put('/:leaveId/accept', requireAuth, requireAgentRole, acceptLeaveRequest);
+router.put('/:leaveId/reject', requireAuth, requireAgentRole, rejectLeaveRequest);
+
+// Delete leave request
+router.delete('/:leaveId', requireAuth, deleteLeaveRequest);
 
 export default router;

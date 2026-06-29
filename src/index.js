@@ -76,6 +76,18 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/aega', {
 .then(() => console.log('MongoDB connected'))
 .catch((err) => console.error('MongoDB connection error:', err));
 
+// Request/Response logging middleware for agent-management to debug score mismatches
+app.use((req, res, next) => {
+  if (req.path === '/api/agent-management' || req.path === '/api/admin/agent-management') {
+    const originalJson = res.json;
+    res.json = function (body) {
+      console.log(`[LOGGER] Response for ${req.method} ${req.path}:`, JSON.stringify(body, null, 2));
+      return originalJson.apply(this, arguments);
+    };
+  }
+  next();
+});
+
 // Routes
 app.use('/api/users', userRoutes);
 app.use('/auth', authRoutes);

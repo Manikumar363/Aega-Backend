@@ -4,7 +4,7 @@ export const listUniversities = async (req, res) => {
   try {
     // Return all universities registered in platform (self-registered or agent-created)
     const universities = await University.find({ $or: [{ userId: { $ne: null } }, { createdBy: { $ne: null } }] })
-      .select('_id name email region country city logo coursesOffered status')
+      .select('_id name email region country city logo coursesOffered status complianceScore numberOfAudits activeAlerts riskLevel')
       .lean();
 
     return res.status(200).json({

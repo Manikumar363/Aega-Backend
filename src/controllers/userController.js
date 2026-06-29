@@ -1,8 +1,11 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import User from '../models/user.js';
 import AgentProfile from '../models/agentProfile.js';
 import University from '../models/university.js';
+import EntityAudit from '../models/entityAudit.js';
+import AuditCategory from '../models/auditCategory.js';
 
 const normalizeText = (value) => String(value || '').trim();
 
@@ -222,6 +225,25 @@ export const signupUser = async (req, res) => {
           status: 'pending'
         });
       }
+    } else if (normalizedRole === 'agent') {
+      const existingAgentProfile = await AgentProfile.findOne({ userId: user._id });
+      if (!existingAgentProfile) {
+        await AgentProfile.create({
+          userId: user._id,
+          firstName: user.firstName || firstName || 'Agent',
+          lastName: user.lastName || lastName || 'User',
+          emailId: user.email,
+          mobileNumber: '+0 000 000 0000',
+          designation: user.businessType === 'b2b' ? 'B2B Owner' : 'Agent',
+          office: 'HQ',
+          country: 'Not Specified',
+          createdBy: user._id,
+          complianceScore: 100,
+          numberOfAudits: 0,
+          activeAlerts: 0,
+          riskLevel: 'LOW'
+        });
+      }
     }
 
     const token = buildAuthToken(user);
@@ -265,7 +287,7 @@ export const loginUser = async (req, res) => {
       profileImage: user.profileImage || null
     };
 
-    if (user.role === 'agent') {
+    if (user.role === 'agent' || user.role === 'counsellor') {
       userResponse.businessType = user.businessType || null;
       const profile = await AgentProfile.findOne({ userId: user._id });
       userResponse.authorization = profile?.authorization || null;
@@ -320,7 +342,7 @@ export const getMyAgentProfile = async (req, res) => {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    if (user.role !== 'agent') {
+    if (user.role !== 'agent' && user.role !== 'counsellor') {
       return res.status(403).json({ error: 'Agent profile access only.' });
     }
 
@@ -342,7 +364,7 @@ export const updateMyAgentProfile = async (req, res) => {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    if (user.role !== 'agent') {
+    if (user.role !== 'agent' && user.role !== 'counsellor') {
       return res.status(403).json({ error: 'Agent profile access only.' });
     }
 
@@ -485,7 +507,7 @@ export const changeMyPassword = async (req, res) => {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    if (user.role !== 'agent') {
+    if (user.role !== 'agent' && user.role !== 'counsellor') {
       return res.status(403).json({ error: 'Agent profile access only.' });
     }
 
@@ -522,7 +544,7 @@ export const addMyProfileDocument = async (req, res) => {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    if (user.role !== 'agent') {
+    if (user.role !== 'agent' && user.role !== 'counsellor') {
       return res.status(403).json({ error: 'Agent profile access only.' });
     }
 
@@ -589,5 +611,131 @@ export const createAdminUser = async () => {
     }
   } catch (err) {
     console.error('Error creating admin user:', err.message);
+  }
+};
+
+export const getMyComplianceSummary = async (req, res) => {
+  try {
+    let targetType = null;
+    let targetId = null;
+
+    if (req.user.role === 'agent' || req.user.role === 'counsellor') {
+      targetType = 'agent';
+      const profile = await AgentProfile.findOne({ userId: req.user.id });
+      if (!profile) {
+        return res.status(404).json({ error: 'Agent profile not found.' });
+      }
+      targetId = profile._id;
+    } else if (req.user.role === 'university') {
+      targetType = 'university';
+      const university = await University.findOne({ userId: req.user.id });
+      if (!university) {
+        return res.status(404).json({ error: 'University profile not found.' });
+      }
+      targetId = university._id;
+    } else {
+      return res.status(400).json({ error: 'Invalid user role for compliance summary.' });
+    }
+
+    let complianceScore = 100;
+    let numberOfAudits = 0;
+    let activeAlerts = 0;
+    let riskLevel = 'LOW';
+
+    if (targetType === 'agent') {
+      const profile = await AgentProfile.findById(targetId);
+      if (profile) {
+        complianceScore = profile.complianceScore ?? 100;
+        numberOfAudits = profile.numberOfAudits ?? 0;
+        activeAlerts = profile.activeAlerts ?? 0;
+        riskLevel = profile.riskLevel ?? 'LOW';
+      }
+    } else if (targetType === 'university') {
+      const university = await University.findById(targetId);
+      if (university) {
+        complianceScore = university.complianceScore ?? 100;
+        numberOfAudits = university.numberOfAudits ?? 0;
+        activeAlerts = university.activeAlerts ?? 0;
+        riskLevel = university.riskLevel ?? 'LOW';
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        overallScore: complianceScore,
+        numberOfAudits,
+        activeIssues: activeAlerts,
+        riskLevel
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching compliance summary.',
+      error: error.message
+    });
+  }
+};
+
+export const getMyComplianceStatus = async (req, res) => {
+  try {
+    let targetType = null;
+    let targetId = null;
+
+    if (req.user.role === 'agent' || req.user.role === 'counsellor') {
+      targetType = 'agent';
+      const profile = await AgentProfile.findOne({ userId: req.user.id });
+      if (!profile) {
+        return res.status(404).json({ error: 'Agent profile not found.' });
+      }
+      targetId = profile._id;
+    } else if (req.user.role === 'university') {
+      targetType = 'university';
+      const university = await University.findOne({ userId: req.user.id });
+      if (!university) {
+        return res.status(404).json({ error: 'University profile not found.' });
+      }
+      targetId = university._id;
+    } else {
+      return res.status(400).json({ error: 'Invalid user role for compliance status.' });
+    }
+
+    const categoriesTarget = targetType === 'university' ? 'university' : 'agent';
+    const categories = await AuditCategory.find({ target: categoriesTarget }).lean();
+
+    const checks = await EntityAudit.find({ targetType, targetId }).lean();
+    const checksByCategory = {};
+    checks.forEach(check => {
+      checksByCategory[String(check.categoryId)] = check;
+    });
+
+    const complianceList = categories.map((cat, index) => {
+      const check = checksByCategory[String(cat._id)];
+      let status = 'Pending';
+
+      if (check) {
+        const hasAlerts = (check.answers || []).some(ans => ans.status === 'non-compliant');
+        status = hasAlerts ? 'Non-Compliant' : 'Compliant';
+      }
+
+      return {
+        id: index + 1,
+        categoryId: cat._id,
+        name: cat.name,
+        status
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: complianceList
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching compliance status.',
+      error: error.message
+    });
   }
 };

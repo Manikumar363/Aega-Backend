@@ -18,7 +18,7 @@ export const requireAuth = (req, res, next) => {
 };
 
 export const requireAgentRole = (req, res, next) => {
-  if (!req.user || req.user.role !== 'agent') {
+  if (!req.user || (req.user.role !== 'agent' && req.user.role !== 'counsellor')) {
     return res.status(403).json({ error: 'Agent access required.' });
   }
 
@@ -67,7 +67,7 @@ export const requireUniversityManagementAccess = (req, res, next) => {
 
 export const requireAgentManagementPermission = (permissionKey) => async (req, res, next) => {
   try {
-    if (!req.user || req.user.role !== 'agent') {
+    if (!req.user || (req.user.role !== 'agent' && req.user.role !== 'counsellor')) {
       return res.status(403).json({ error: 'Agent access required.' });
     }
 
@@ -79,6 +79,12 @@ export const requireAgentManagementPermission = (permissionKey) => async (req, r
     // Controller agents might not have an AgentProfile record.
     // In that case, allow access and treat them as top-level managers.
     if (!profile) {
+      return next();
+    }
+
+    // Top-level managers/owners (self-registered or self-managed) have all permissions.
+    if (!profile.createdBy || String(profile.createdBy) === String(profile.userId)) {
+      req.agentProfile = profile;
       return next();
     }
 

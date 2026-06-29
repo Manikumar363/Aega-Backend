@@ -21,27 +21,24 @@ import {
 
 const router = express.Router();
 
-// Require both auth and admin role for all endpoints in this router
-router.use(requireAuth, requireAdminRole);
+// GET routes (accessible by any authenticated user for reading audit details and compliance status)
+router.get('/checks/list', requireAuth, getAuditChecks);
+router.get('/checks/summary', requireAuth, getEntityAuditSummary);
+router.get('/compliances/summary', requireAuth, getEntityComplianceSummary);
+router.get('/compliances/status', requireAuth, getEntityComplianceStatus);
+router.get('/checks/:checkId', requireAuth, getAuditCheckById);
+router.get('/', requireAuth, getCategories);
+router.get('/:auditId', requireAuth, getCategoryById);
 
-// Audit Check / Submission routes (placed before category paths to avoid parameter conflicts)
-router.post('/checks/submit', submitAuditCheck);
-router.get('/checks/list', getAuditChecks);
-router.get('/checks/summary', getEntityAuditSummary);
-router.get('/checks/:checkId', getAuditCheckById);
-router.get('/compliances/summary', getEntityComplianceSummary);
-router.get('/compliances/status', getEntityComplianceStatus);
-
-// Category Management
-router.post('/', createCategory);
-router.get('/', getCategories);
-router.get('/:auditId', getCategoryById);
-router.put('/:auditId', updateCategory);
-router.delete('/:auditId', deleteCategory);
+// POST / PUT / DELETE modification routes (restricted to admins)
+router.post('/checks/submit', requireAuth, requireAdminRole, submitAuditCheck);
+router.post('/', requireAuth, requireAdminRole, createCategory);
+router.put('/:auditId', requireAuth, requireAdminRole, updateCategory);
+router.delete('/:auditId', requireAuth, requireAdminRole, deleteCategory);
 
 // Criteria Management under Category
-router.post('/:auditId/criteria', addCriterion);
-router.put('/:auditId/criteria/:criterionId', updateCriterion);
-router.delete('/:auditId/criteria/:criterionId', deleteCriterion);
+router.post('/:auditId/criteria', requireAuth, requireAdminRole, addCriterion);
+router.put('/:auditId/criteria/:criterionId', requireAuth, requireAdminRole, updateCriterion);
+router.delete('/:auditId/criteria/:criterionId', requireAuth, requireAdminRole, deleteCriterion);
 
 export default router;

@@ -17,7 +17,7 @@ const mapSeverityToWeight = (severity) => {
 };
 
 // Recalculates and updates compliance metrics on the target entity document
-const updateTargetEntityKPIs = async (targetType, targetId) => {
+const updateTargetEntityKPIs = async (targetType, targetId, newAuditScore) => {
   // 1. Get total number of audits completed for this target
   const numberOfAudits = await EntityAudit.countDocuments({ targetType, targetId });
 
@@ -35,10 +35,33 @@ const updateTargetEntityKPIs = async (targetType, targetId) => {
   const latestAudits = Object.values(latestByCategory);
 
   // 3. Compute overall compliance score
-  const sumScore = latestAudits.reduce((acc, a) => acc + a.complianceScore, 0);
-  const overallScore = latestAudits.length > 0 
-    ? Math.round((sumScore / latestAudits.length) * 100) / 100 
-    : 100;
+  let overallScore = 100;
+
+  // Retrieve the profile's current complianceScore before updating
+  let targetProfile = null;
+  if (mongoose.Types.ObjectId.isValid(targetId)) {
+    if (targetType === 'agent') {
+      targetProfile = await AgentProfile.findById(targetId).select('complianceScore');
+    } else if (targetType === 'company') {
+      targetProfile = await Company.findById(targetId).select('complianceScore');
+    } else if (targetType === 'university') {
+      targetProfile = await University.findById(targetId).select('complianceScore');
+    }
+  }
+
+  if (newAuditScore !== undefined && newAuditScore !== null) {
+    if (numberOfAudits > 1 && targetProfile && targetProfile.complianceScore !== undefined && targetProfile.complianceScore !== null) {
+      overallScore = Math.round(((targetProfile.complianceScore + newAuditScore) / 2) * 100) / 100;
+    } else {
+      overallScore = newAuditScore;
+    }
+  } else {
+    // Fallback if no newAuditScore is provided
+    const sumScore = latestAudits.reduce((acc, a) => acc + a.complianceScore, 0);
+    overallScore = latestAudits.length > 0 
+      ? Math.round((sumScore / latestAudits.length) * 100) / 100 
+      : 100;
+  }
 
   // 4. Compute active alerts (count of non-compliant questions in latest check per category)
   let activeAlerts = 0;
@@ -156,15 +179,17 @@ export const submitAuditCheck = async (req, res) => {
       const severity = ans.severity || criterion.severity || 'low';
       const normalizedSeverity = String(severity).toLowerCase().trim();
 
+      const ansStatus = String(ans.status || 'compliant').toLowerCase().trim();
       let levelScore = 100;
-      let status = 'compliant';
+      let finalStatus = 'compliant';
 
-      if (normalizedSeverity === 'medium') {
-        levelScore = 66.66;
-        status = 'non-compliant';
-      } else if (normalizedSeverity === 'high') {
-        levelScore = 33.33;
-        status = 'non-compliant';
+      if (ansStatus === 'non-compliant') {
+        finalStatus = 'non-compliant';
+        if (normalizedSeverity === 'high') {
+          levelScore = 33.33;
+        } else {
+          levelScore = 66.66;
+        }
       }
 
       sumScores += levelScore;
@@ -174,7 +199,7 @@ export const submitAuditCheck = async (req, res) => {
         criterion: criterion.criterion,
         evidence: criterion.evidence,
         severity: normalizedSeverity,
-        status,
+        status: finalStatus,
         comment: ans.comment ? String(ans.comment).trim() : null
       };
     });
@@ -183,8 +208,8 @@ export const submitAuditCheck = async (req, res) => {
       ? Math.round((sumScores / processedAnswers.length) * 100) / 100
       : 100;
 
-    // Delete any existing/previous audit checks for this target and category to keep only the latest in the database
-    await EntityAudit.deleteMany({ targetType, targetId, categoryId });
+    // Keep historical audits and disable deletion to allow audit counts to accumulate
+    // await EntityAudit.deleteMany({ targetType, targetId, categoryId });
 
     const auditCheck = new EntityAudit({
       targetType,
@@ -198,8 +223,8 @@ export const submitAuditCheck = async (req, res) => {
 
     await auditCheck.save();
 
-    // Trigger KPI recalculation for the target profile
-    const newKPIs = await updateTargetEntityKPIs(targetType, targetId);
+    // Trigger KPI recalculation for the target profile, passing the newly completed audit's score
+    const newKPIs = await updateTargetEntityKPIs(targetType, targetId, complianceScore);
 
     return res.status(201).json({
       success: true,
@@ -219,34 +244,41 @@ export const submitAuditCheck = async (req, res) => {
 // GET: Fetch Audit Checks for a specific entity
 export const getAuditChecks = async (req, res) => {
   try {
-    const { targetType, targetId } = req.query;
+    let resolvedTargetType = req.query.targetType;
+    let resolvedTargetId = req.query.targetId;
 
-    if (!targetType || !targetId) {
-      return res.status(400).json({
-        success: false,
-        message: 'targetType and targetId query parameters are required.'
-      });
+    if (!resolvedTargetType || !resolvedTargetId) {
+      if (req.user && (req.user.role === 'agent' || req.user.role === 'counsellor')) {
+        resolvedTargetType = 'agent';
+        const profile = await AgentProfile.findOne({ userId: req.user.id });
+        if (!profile) {
+          return res.status(404).json({ success: false, message: 'Agent profile not found.' });
+        }
+        resolvedTargetId = profile._id;
+      } else if (req.user && req.user.role === 'university') {
+        resolvedTargetType = 'university';
+        const university = await University.findOne({ userId: req.user.id });
+        if (!university) {
+          return res.status(404).json({ success: false, message: 'University profile not found.' });
+        }
+        resolvedTargetId = university._id;
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'targetType and targetId query parameters are required.'
+        });
+      }
     }
 
-    const checks = await EntityAudit.find({ targetType, targetId })
+    const checks = await EntityAudit.find({ targetType: resolvedTargetType, targetId: resolvedTargetId })
       .sort({ createdAt: -1 })
       .populate('auditedBy', 'name email role')
       .lean();
 
-    // Filter to only keep the latest check per category (handles pre-existing duplicate entries gracefully)
-    const latestChecks = [];
-    const seenCategories = new Set();
-    for (const check of checks) {
-      const catIdStr = String(check.categoryId);
-      if (!seenCategories.has(catIdStr)) {
-        seenCategories.add(catIdStr);
-        latestChecks.push(check);
-      }
-    }
-
+    // Return all audit checks (full chronological history)
     return res.status(200).json({
       success: true,
-      data: latestChecks,
+      data: checks,
       message: 'Audit checks fetched successfully.'
     });
   } catch (error) {
@@ -296,30 +328,47 @@ export const getAuditCheckById = async (req, res) => {
 // GET: Get Entity Audit Summary KPIs
 export const getEntityAuditSummary = async (req, res) => {
   try {
-    const { targetType, targetId } = req.query;
+    let resolvedTargetType = req.query.targetType;
+    let resolvedTargetId = req.query.targetId;
 
-    if (!targetType || !targetId) {
-      return res.status(400).json({
-        success: false,
-        message: 'targetType and targetId query parameters are required.'
-      });
+    if (!resolvedTargetType || !resolvedTargetId) {
+      if (req.user && (req.user.role === 'agent' || req.user.role === 'counsellor')) {
+        resolvedTargetType = 'agent';
+        const profile = await AgentProfile.findOne({ userId: req.user.id });
+        if (!profile) {
+          return res.status(404).json({ success: false, message: 'Agent profile not found.' });
+        }
+        resolvedTargetId = profile._id;
+      } else if (req.user && req.user.role === 'university') {
+        resolvedTargetType = 'university';
+        const university = await University.findOne({ userId: req.user.id });
+        if (!university) {
+          return res.status(404).json({ success: false, message: 'University profile not found.' });
+        }
+        resolvedTargetId = university._id;
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: 'targetType and targetId query parameters are required.'
+        });
+      }
     }
 
-    // Attempt to read from the profile document directly for fast performance (only if targetId is a valid ObjectId)
+    // Attempt to read from the profile document directly for fast performance (only if resolvedTargetId is a valid ObjectId)
     let profile = null;
-    if (mongoose.Types.ObjectId.isValid(targetId)) {
-      if (targetType === 'agent') {
-        profile = await AgentProfile.findById(targetId).select('complianceScore numberOfAudits activeAlerts riskLevel');
-      } else if (targetType === 'company') {
-        profile = await Company.findById(targetId).select('complianceScore numberOfAudits activeAlerts riskLevel');
-      } else if (targetType === 'university') {
-        profile = await University.findById(targetId).select('complianceScore numberOfAudits activeAlerts riskLevel');
+    if (mongoose.Types.ObjectId.isValid(resolvedTargetId)) {
+      if (resolvedTargetType === 'agent') {
+        profile = await AgentProfile.findById(resolvedTargetId).select('complianceScore numberOfAudits activeAlerts riskLevel');
+      } else if (resolvedTargetType === 'company') {
+        profile = await Company.findById(resolvedTargetId).select('complianceScore numberOfAudits activeAlerts riskLevel');
+      } else if (resolvedTargetType === 'university') {
+        profile = await University.findById(resolvedTargetId).select('complianceScore numberOfAudits activeAlerts riskLevel');
       }
     }
 
     if (!profile) {
       // If profile document does not exist or is a mock target, compute dynamically from EntityAudit checks
-      const allAudits = await EntityAudit.find({ targetType, targetId }).lean();
+      const allAudits = await EntityAudit.find({ targetType: resolvedTargetType, targetId: resolvedTargetId }).lean();
       
       const latestByCategory = {};
       allAudits.forEach(audit => {

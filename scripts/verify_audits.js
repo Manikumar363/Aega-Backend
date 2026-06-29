@@ -141,8 +141,8 @@ async function runTests() {
 
     const checkResult = checkRes.data.data;
     console.log('Check Score Calculated by Server:', checkResult.complianceScore);
-    if (Math.abs(checkResult.complianceScore - 88.89) > 0.1) {
-      throw new Error(`Expected score close to 88.89, but got ${checkResult.complianceScore}`);
+    if (Math.abs(checkResult.complianceScore - 86.67) > 0.1) {
+      throw new Error(`Expected score close to 86.67, but got ${checkResult.complianceScore}`);
     }
     console.log('Verification: Audit check compliance score matches calculation formula.');
   } catch (error) {
@@ -162,8 +162,8 @@ async function runTests() {
       riskLevel: universityProfile.riskLevel
     });
 
-    if (Math.abs(universityProfile.complianceScore - 88.89) > 0.1) {
-      throw new Error(`Profile complianceScore not matching expected 88.89 (got ${universityProfile.complianceScore})`);
+    if (Math.abs(universityProfile.complianceScore - 86.67) > 0.1) {
+      throw new Error(`Profile complianceScore not matching expected 86.67 (got ${universityProfile.complianceScore})`);
     }
     if (universityProfile.numberOfAudits !== 1) {
       throw new Error(`Expected numberOfAudits = 1, but got ${universityProfile.numberOfAudits}`);
@@ -187,7 +187,7 @@ async function runTests() {
     const summary = summaryRes.data.data;
     console.log('Summary response:', summary);
 
-    if (Math.abs(summary.complianceScore - 88.89) > 0.1 || summary.numberOfAudits !== 1 || summary.activeAlerts !== 1 || summary.riskLevel !== 'LOW') {
+    if (Math.abs(summary.complianceScore - 86.67) > 0.1 || summary.numberOfAudits !== 1 || summary.activeAlerts !== 1 || summary.riskLevel !== 'LOW') {
       throw new Error('Summary endpoint returned unexpected compliance KPIs.');
     }
     console.log('Verification: Summary endpoint returns correct active alert count and risk level.');

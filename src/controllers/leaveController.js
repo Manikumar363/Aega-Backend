@@ -78,9 +78,7 @@ export const getTeamLeaveRequests = async (req, res) => {
 };
 
 const resolveManagedLeave = async (leaveId, user) => {
-  const isAdmin = user?.role === 'admin';
-  const query = isAdmin ? { _id: leaveId } : { _id: leaveId, ownerAgentId: user.id };
-  const leaveRequest = await LeaveRequest.findOne(query);
+  const leaveRequest = await LeaveRequest.findOne({ _id: leaveId, ownerAgentId: user.id });
   if (!leaveRequest) {
     return { error: { code: 404, message: 'Leave request not found.' } };
   }
@@ -121,4 +119,28 @@ export const acceptLeaveRequest = async (req, res) => {
 
 export const rejectLeaveRequest = async (req, res) => {
   return reviewLeave(req, res, 'rejected');
+};
+
+export const deleteLeaveRequest = async (req, res) => {
+  try {
+    const { leaveId } = req.params;
+    const leaveRequest = await LeaveRequest.findById(leaveId);
+
+    if (!leaveRequest) {
+      return res.status(404).json({ error: 'Leave request not found.' });
+    }
+
+    const isParent = String(leaveRequest.ownerAgentId) === String(req.user.id);
+    const isAdmin = req.user.role === 'admin';
+
+    if (!isParent && !isAdmin) {
+      return res.status(403).json({ error: 'You are not authorized to delete this leave request.' });
+    }
+
+    await LeaveRequest.deleteOne({ _id: leaveId });
+
+    return res.json({ message: 'Leave request deleted successfully.' });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 };

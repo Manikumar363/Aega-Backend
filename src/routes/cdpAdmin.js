@@ -6,12 +6,14 @@ import {
   getCdpCourses,
   updateCdpCourse
 } from '../controllers/cdpController.js';
+import { getTargetUserEnrolledCourses } from '../controllers/courseEnrollmentController.js';
 import { requireAuth, requireAdminRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
 router.get('/', requireAuth, requireAdminRole, getCdpCourses);
 router.post('/', requireAuth, requireAdminRole, createCdpCourse);
+router.get('/enrolled', requireAuth, requireAdminRole, getTargetUserEnrolledCourses);
 router.get('/:courseId', requireAuth, requireAdminRole, getCdpCourseById);
 router.put('/:courseId', requireAuth, requireAdminRole, updateCdpCourse);
 router.delete('/:courseId', requireAuth, requireAdminRole, deleteCdpCourse);

@@ -1,6 +1,9 @@
 import mongoose from 'mongoose';
 import CourseProgress from '../models/courseProgress.js';
 import CdpCourse from '../models/cdpCourse.js';
+import AgentProfile from '../models/agentProfile.js';
+import University from '../models/university.js';
+import Company from '../models/company.js';
 
 const normalizeText = (value) => String(value || '').trim();
 
@@ -277,6 +280,79 @@ export const getCourseProgressStats = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: 'Error fetching statistics',
+      error: error.message
+    });
+  }
+};
+
+// GET: Get enrolled courses for a target user profile (Admin only)
+export const getTargetUserEnrolledCourses = async (req, res) => {
+  try {
+    const { targetType, targetId } = req.query;
+
+    if (!targetType || !targetId) {
+      return res.status(400).json({
+        success: false,
+        message: 'targetType and targetId are required query parameters'
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(targetId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid targetId format. Must be a 24-character hex string.'
+      });
+    }
+
+    let resolvedUserId = null;
+
+    if (targetType === 'agent') {
+      const profile = await AgentProfile.findById(targetId).select('userId');
+      if (profile) resolvedUserId = profile.userId;
+    } else if (targetType === 'university') {
+      const university = await University.findById(targetId).select('userId');
+      if (university) resolvedUserId = university.userId;
+    } else if (targetType === 'company') {
+      const company = await Company.findById(targetId).select('agentId');
+      if (company) resolvedUserId = company.agentId;
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid targetType. Must be agent, university, or company.'
+      });
+    }
+
+    if (!resolvedUserId) {
+      return res.json({
+        success: true,
+        data: [],
+        message: 'No linked user account found for the target.'
+      });
+    }
+
+    const courseProgressList = await CourseProgress.find({ userId: resolvedUserId })
+      .populate('courseId', 'courseName type timeInHr modules description coverPicture hyperLink')
+      .populate('userId', 'name email role')
+      .sort({ enrollmentDate: -1 });
+
+    // Update status for each course based on due date
+    const updatedCourses = courseProgressList.map((course) => {
+      const updatedStatus = updateCourseStatus(course);
+      if (updatedStatus !== course.status) {
+        course.status = updatedStatus;
+      }
+      return course;
+    });
+
+    return res.json({
+      success: true,
+      data: updatedCourses,
+      message: 'Enrolled courses for target user fetched successfully'
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching enrolled courses for target user',
       error: error.message
     });
   }

@@ -1,8 +1,18 @@
 import express from 'express';
-import { addMyProfileDocument, changeMyPassword, getMyAgentProfile, updateMyAgentProfile } from '../controllers/userController.js';
+import {
+  addMyProfileDocument,
+  changeMyPassword,
+  getMyAgentProfile,
+  updateMyAgentProfile,
+  getMyComplianceSummary,
+  getMyComplianceStatus
+} from '../controllers/userController.js';
 import { requireAuth, requireAgentRole } from '../middleware/auth.js';
 
 const router = express.Router();
+
+router.get('/compliance-summary', requireAuth, getMyComplianceSummary);
+router.get('/compliance-status', requireAuth, getMyComplianceStatus);
 
 router.get('/me', requireAuth, requireAgentRole, getMyAgentProfile);
 router.put('/me', requireAuth, requireAgentRole, updateMyAgentProfile);

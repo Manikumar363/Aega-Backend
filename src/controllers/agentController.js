@@ -93,7 +93,7 @@ export const getMyUniversityRequestById = async (req, res) => {
       _id: req.params.requestId,
       agentId: req.user.id
     })
-      .populate('universityId', 'name email region country city logo status')
+      .populate('universityId', 'name email region country city logo status complianceScore numberOfAudits activeAlerts riskLevel')
       .lean();
 
     if (!request) {
@@ -133,7 +133,7 @@ export const getMyUniversityRequests = async (req, res) => {
   try {
     const requests = await UniversityRequest.find({ agentId: req.user.id })
       .sort({ createdAt: -1 })
-      .populate('universityId', 'name email region country city logo status')
+      .populate('universityId', 'name email region country city logo status complianceScore numberOfAudits activeAlerts riskLevel')
       .lean();
 
     return res.json(requests);
@@ -154,7 +154,29 @@ export const getUniversityRequestsForUniversity = async (req, res) => {
       .populate('agentId', 'name email role businessType createdAt')
       .lean();
 
-    return res.json(requests);
+    const agentIds = requests.map(r => r.agentId?._id || r.agentId).filter(Boolean);
+    const agentProfiles = await AgentProfile.find({ userId: { $in: agentIds } })
+      .select('userId complianceScore numberOfAudits activeAlerts riskLevel')
+      .lean();
+
+    const profileMap = new Map(agentProfiles.map(p => [String(p.userId), p]));
+
+    const enrichedRequests = requests.map(request => {
+      const agentIdStr = String(request.agentId?._id || request.agentId);
+      const profile = profileMap.get(agentIdStr);
+      return {
+        ...request,
+        agentProfile: profile ? {
+          id: profile._id,
+          complianceScore: profile.complianceScore ?? 100,
+          numberOfAudits: profile.numberOfAudits ?? 0,
+          activeAlerts: profile.activeAlerts ?? 0,
+          riskLevel: profile.riskLevel || 'LOW'
+        } : null
+      };
+    });
+
+    return res.json(enrichedRequests);
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -164,7 +186,7 @@ export const getMyUniversityRequestsForAgent = async (req, res) => {
   try {
     const requests = await UniversityRequest.find({ agentId: req.user.id })
       .sort({ createdAt: -1 })
-      .populate('universityId', 'name email region country city logo status')
+      .populate('universityId', 'name email region country city logo status complianceScore numberOfAudits activeAlerts riskLevel')
       .lean();
 
     return res.json(requests);
@@ -303,7 +325,11 @@ export const createAgent = async (req, res) => {
         designation: profile.designation,
         office: profile.office,
         country: profile.country,
-        authorization: profile.authorization
+        authorization: profile.authorization,
+        complianceScore: profile.complianceScore !== undefined ? profile.complianceScore : 100,
+        numberOfAudits: profile.numberOfAudits !== undefined ? profile.numberOfAudits : 0,
+        activeAlerts: profile.activeAlerts !== undefined ? profile.activeAlerts : 0,
+        riskLevel: profile.riskLevel || 'LOW'
       },
       email: {
         sent: emailSent,
@@ -337,6 +363,10 @@ const buildAgentResponse = (profile, user) => ({
   office: profile.office,
   country: profile.country,
   authorization: profile.authorization,
+  complianceScore: profile.complianceScore !== undefined ? profile.complianceScore : 100,
+  numberOfAudits: profile.numberOfAudits !== undefined ? profile.numberOfAudits : 0,
+  activeAlerts: profile.activeAlerts !== undefined ? profile.activeAlerts : 0,
+  riskLevel: profile.riskLevel || 'LOW',
   createdAt: profile.createdAt,
   user: user
     ? {
@@ -446,6 +476,33 @@ export const deleteAgent = async (req, res) => {
 
 export const getAllAgentsForAdmin = async (req, res) => {
   try {
+    // Self-healing: Ensure AgentProfile documents exist for all users with role 'agent'
+    const agentUsers = await User.find({ role: 'agent' });
+    for (const user of agentUsers) {
+      const profileExists = await AgentProfile.exists({ userId: user._id });
+      if (!profileExists) {
+        const parts = (user.name || '').split(' ');
+        const firstName = user.firstName || parts[0] || 'Agent';
+        const lastName = user.lastName || parts.slice(1).join(' ') || 'User';
+
+        await AgentProfile.create({
+          userId: user._id,
+          firstName,
+          lastName,
+          emailId: user.email,
+          mobileNumber: '+0 000 000 0000',
+          designation: user.businessType === 'b2b' ? 'B2B Owner' : 'Agent',
+          office: 'HQ',
+          country: 'Not Specified',
+          createdBy: user._id,
+          complianceScore: 100,
+          numberOfAudits: 0,
+          activeAlerts: 0,
+          riskLevel: 'LOW'
+        });
+      }
+    }
+
     const agents = await AgentProfile.find()
       .sort({ createdAt: -1 })
       .populate('userId', 'name email role businessType createdAt')
