@@ -6,6 +6,7 @@ import AgentProfile from '../models/agentProfile.js';
 import University from '../models/university.js';
 import EntityAudit from '../models/entityAudit.js';
 import AuditCategory from '../models/auditCategory.js';
+import CourseProgress from '../models/courseProgress.js';
 
 const normalizeText = (value) => String(value || '').trim();
 
@@ -660,13 +661,25 @@ export const getMyComplianceSummary = async (req, res) => {
       }
     }
 
+    // Calculate CDP hours completed by this user
+    let completedCdpHours = 0;
+    try {
+      const completedProgress = await CourseProgress.find({ userId: req.user.id, status: 'completed' })
+        .populate('courseId', 'timeInHr');
+      completedCdpHours = completedProgress.reduce((sum, item) => sum + (item.courseId?.timeInHr || 0), 0);
+    } catch (cdpErr) {
+      console.error('Error calculating completed CDP hours:', cdpErr);
+    }
+
     return res.status(200).json({
       success: true,
       data: {
         overallScore: complianceScore,
         numberOfAudits,
         activeIssues: activeAlerts,
-        riskLevel
+        riskLevel,
+        completedCdpHours,
+        targetCdpHours: 120
       }
     });
   } catch (error) {
