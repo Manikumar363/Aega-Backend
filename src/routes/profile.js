@@ -5,7 +5,8 @@ import {
   getMyAgentProfile,
   updateMyAgentProfile,
   getMyComplianceSummary,
-  getMyComplianceStatus
+  getMyComplianceStatus,
+  getMyLocationCompliances
 } from '../controllers/userController.js';
 import { requireAuth, requireAgentRole } from '../middleware/auth.js';
 
@@ -13,6 +14,7 @@ const router = express.Router();
 
 router.get('/compliance-summary', requireAuth, getMyComplianceSummary);
 router.get('/compliance-status', requireAuth, getMyComplianceStatus);
+router.get('/compliance-locations', requireAuth, getMyLocationCompliances);
 
 router.get('/me', requireAuth, requireAgentRole, getMyAgentProfile);
 router.put('/me', requireAuth, requireAgentRole, updateMyAgentProfile);

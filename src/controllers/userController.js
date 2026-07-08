@@ -752,3 +752,116 @@ export const getMyComplianceStatus = async (req, res) => {
     });
   }
 };
+
+export const getMyLocationCompliances = async (req, res) => {
+  try {
+    if (req.user.role !== 'agent' && req.user.role !== 'counsellor') {
+      return res.status(400).json({ error: 'Only agents can fetch location-based compliance statistics.' });
+    }
+
+    // 1. Fetch all profiles under this B2B/B2C agency (owner + counsellors)
+    const profiles = await AgentProfile.find({
+      $or: [{ createdBy: req.user.id }, { userId: req.user.id }]
+    });
+
+    if (profiles.length === 0) {
+      return res.status(200).json({ success: true, data: {} });
+    }
+
+    // 2. Fetch all audit categories
+    const categories = await AuditCategory.find({ target: 'agent' }).lean();
+
+    // 3. Fetch all audits/checks for these profiles
+    const profileIds = profiles.map(p => p._id);
+    const audits = await EntityAudit.find({
+      targetType: 'agent',
+      targetId: { $in: profileIds }
+    }).lean();
+
+    // Index audits by profile ID and category ID
+    const auditsByProfileAndCat = {};
+    audits.forEach(audit => {
+      const pId = String(audit.targetId);
+      const cId = String(audit.categoryId);
+      if (!auditsByProfileAndCat[pId]) {
+        auditsByProfileAndCat[pId] = {};
+      }
+      auditsByProfileAndCat[pId][cId] = audit;
+    });
+
+    // 4. Group profiles by office (location name)
+    const locationGroups = {};
+    profiles.forEach(profile => {
+      const loc = profile.office || 'HQ';
+      if (!locationGroups[loc]) {
+        locationGroups[loc] = [];
+      }
+      locationGroups[loc].push(profile);
+    });
+
+    // 5. Build aggregated stats for each location group
+    const locationStats = {};
+    Object.entries(locationGroups).forEach(([locName, groupProfiles]) => {
+      const count = groupProfiles.length;
+      const sumScore = groupProfiles.reduce((sum, p) => sum + (p.complianceScore ?? 100), 0);
+      const sumAudits = groupProfiles.reduce((sum, p) => sum + (p.numberOfAudits ?? 0), 0);
+      const sumAlerts = groupProfiles.reduce((sum, p) => sum + (p.activeAlerts ?? 0), 0);
+      const avgScore = count > 0 ? Math.round(sumScore / count) : 100;
+
+      let riskLevel = 'LOW';
+      if (avgScore < 50) riskLevel = 'HIGH';
+      else if (avgScore < 85) riskLevel = 'MEDIUM';
+
+      // Aggregate compliance status per category
+      const aggregatedIndicators = categories.map((cat, idx) => {
+        let hasCheck = false;
+        let hasNonCompliant = false;
+
+        groupProfiles.forEach(p => {
+          const check = auditsByProfileAndCat[String(p._id)]?.[String(cat._id)];
+          if (check) {
+            hasCheck = true;
+            const hasAlerts = (check.answers || []).some(ans => ans.status === 'non-compliant');
+            if (hasAlerts) {
+              hasNonCompliant = true;
+            }
+          }
+        });
+
+        let status = 'Pending';
+        if (hasCheck) {
+          status = hasNonCompliant ? 'Non-Compliant' : 'Compliant';
+        }
+
+        return {
+          id: idx + 1,
+          categoryId: cat._id,
+          name: cat.name,
+          status
+        };
+      });
+
+      locationStats[locName] = {
+        agentCount: count,
+        summary: {
+          overallScore: avgScore,
+          numberOfAudits: sumAudits,
+          activeIssues: sumAlerts,
+          riskLevel
+        },
+        indicators: aggregatedIndicators
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: locationStats
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching location compliances.',
+      error: error.message
+    });
+  }
+};

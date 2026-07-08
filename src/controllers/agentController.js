@@ -368,6 +368,7 @@ const buildAgentResponse = (profile, user) => ({
   activeAlerts: profile.activeAlerts !== undefined ? profile.activeAlerts : 0,
   riskLevel: profile.riskLevel || 'LOW',
   createdAt: profile.createdAt,
+  createdBy: profile.createdBy,
   user: user
     ? {
         id: user._id,
@@ -503,7 +504,12 @@ export const getAllAgentsForAdmin = async (req, res) => {
       }
     }
 
-    const agents = await AgentProfile.find()
+    const queryFilter = {};
+    if (req.query.createdBy) {
+      queryFilter.createdBy = req.query.createdBy;
+    }
+
+    const agents = await AgentProfile.find(queryFilter)
       .sort({ createdAt: -1 })
       .populate('userId', 'name email role businessType createdAt')
       .populate('createdBy', 'name email role businessType');
