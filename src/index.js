@@ -24,6 +24,7 @@ import adminUniversityRoutes from './routes/adminUniversity.js';
 import universityRequestRoutes from './routes/universityRequest.js';
 import adminAuditRoutes from './routes/adminAudit.js';
 import adminDashboardRoutes from './routes/adminDashboard.js';
+import homepageRoutes from './routes/homepage.js';
 import { createAdminUser, createTestUser } from './controllers/userController.js';
 
 dotenv.config();
@@ -111,6 +112,7 @@ app.use('/api/admin/universities', adminUniversityRoutes);
 app.use('/api/university-requests', universityRequestRoutes);
 app.use('/api/admin/dashboard', adminDashboardRoutes);
 app.use('/api/admin/audits', adminAuditRoutes);
+app.use('/api/homepage', homepageRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
