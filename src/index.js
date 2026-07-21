@@ -25,6 +25,10 @@ import universityRequestRoutes from './routes/universityRequest.js';
 import adminAuditRoutes from './routes/adminAudit.js';
 import adminDashboardRoutes from './routes/adminDashboard.js';
 import homepageRoutes from './routes/homepage.js';
+import aboutRoutes from './routes/about.js';
+import membersRoutes from './routes/members.js';
+import universityCmsRoutes from './routes/universityCms.js';
+import publicCmsRoutes from './routes/publicCms.js';
 import { createAdminUser, createTestUser } from './controllers/userController.js';
 
 dotenv.config();
@@ -113,6 +117,10 @@ app.use('/api/university-requests', universityRequestRoutes);
 app.use('/api/admin/dashboard', adminDashboardRoutes);
 app.use('/api/admin/audits', adminAuditRoutes);
 app.use('/api/homepage', homepageRoutes);
+app.use('/api/about', aboutRoutes);
+app.use('/api/members', membersRoutes);
+app.use('/api/university-cms', universityCmsRoutes);
+app.use('/api/public-cms', publicCmsRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
