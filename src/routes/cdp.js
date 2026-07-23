@@ -11,8 +11,8 @@ import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// List all available courses (public for authenticated users)
-router.get('/', requireAuth, getCdpCourses);
+// List all available courses (public for all users)
+router.get('/', getCdpCourses);
 
 // Enroll in a course
 router.post('/:courseId/enroll', requireAuth, enrollCourse);

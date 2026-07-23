@@ -29,6 +29,7 @@ import aboutRoutes from './routes/about.js';
 import membersRoutes from './routes/members.js';
 import universityCmsRoutes from './routes/universityCms.js';
 import publicCmsRoutes from './routes/publicCms.js';
+import publicCompliancesRoutes from './routes/publicCompliances.js';
 import { createAdminUser, createTestUser } from './controllers/userController.js';
 
 dotenv.config();
@@ -121,6 +122,7 @@ app.use('/api/about', aboutRoutes);
 app.use('/api/members', membersRoutes);
 app.use('/api/university-cms', universityCmsRoutes);
 app.use('/api/public-cms', publicCmsRoutes);
+app.use('/api/public-compliances', publicCompliancesRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
