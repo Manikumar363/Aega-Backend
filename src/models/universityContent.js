@@ -30,6 +30,7 @@ const UniversityContentSchema = new mongoose.Schema({
     }]
   },
   ourImpact: {
+    title: { type: String, default: '' },
     description: { type: String, default: '' },
     image: { type: String, default: '' },
     points: [{

@@ -48,12 +48,16 @@ const defaultUniversityContent = {
     ]
   },
   ourImpact: {
+    title: 'OUR IMPACT',
     description: 'AT AEGA, WE BELIEVE THAT INTERNATIONAL STUDENT RECRUITMENT IS NOT MERELY A TRANSACTION—IT IS A LIFE-CHANGING JOURNEY THAT DEMANDS THE HIGHEST STANDARDS OF PROTECTION AND ETHICS. OUR IMPACT IS MEASURED BY THE STABILITY WE BRING TO INSTITUTIONS AND THE FUTURES WE SECURE FOR STUDENTS WORLDWIDE.',
     image: '/landingPage/why-aega.png',
     points: [
-      { title: 'ESTABLISH A GLOBAL STANDARD', description: 'We aim to become the world\'s leading alliance, making AEGA membership the trusted benchmark for recruitment integrity and sponsor compliance.' },
-      { title: 'TRANSFORM THE INDUSTRY', description: 'We envision a future where every recruitment agent and educational sponsor operates with the tools and insights necessary for excellence.' },
-      { title: 'EMPOWER THROUGH CONFIDENCE', description: 'We strive to equip our partners to facilitate smooth, compliant, and enriching educational experiences for students worldwide.' }
+      { title: 'UKVI ALIGNED', description: '' },
+      { title: 'AQF FRAMEWORK', description: '' },
+      { title: 'GLOBAL STANDARDS', description: '' },
+      { title: 'EDUCATION AGENCIES', description: '' },
+      { title: 'HIGHER EDUCATION', description: '' },
+      { title: 'INTERNATIONAL COMPLIANCE', description: '' }
     ]
   },
   clientReviews: [
@@ -68,6 +72,12 @@ export const getUniversityContent = async (req, res) => {
     if (!content) {
       content = new UniversityContent(defaultUniversityContent);
       await content.save();
+    } else {
+      // Auto-migrate if it has the old 3-point list or missing title field
+      if (!content.ourImpact || !content.ourImpact.title || !content.ourImpact.points || content.ourImpact.points.length <= 3) {
+        content.ourImpact = defaultUniversityContent.ourImpact;
+        await content.save();
+      }
     }
     return res.status(200).json({ success: true, data: content });
   } catch (error) {

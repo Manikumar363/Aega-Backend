@@ -28,6 +28,8 @@ const normalizeEvidenceFiles = (evidenceFilesPayload) => {
 export const createComplaint = async (req, res) => {
   try {
     const complaintPayload = {
+      targetType: req.body.targetType ? normalizeText(req.body.targetType).toLowerCase() : 'agent',
+      targetId: req.body.targetId ? normalizeText(req.body.targetId) : null,
       firstName: normalizeText(req.body.firstName),
       lastName: normalizeText(req.body.lastName),
       emailAddress: normalizeText(req.body.emailAddress || req.body.email),

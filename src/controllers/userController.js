@@ -269,10 +269,15 @@ export const signupUser = async (req, res) => {
 };
 
 export const loginUser = async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, role } = req.body;
   try {
     const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ error: 'Invalid email or password.' });
+    if (!user) return res.status(401).json({ error: 'Unregistered emailID' });
+
+    // Assert role match
+    if (role && user.role !== role) {
+      return res.status(401).json({ error: 'Unregistered emailID' });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(401).json({ error: 'Invalid email or password.' });

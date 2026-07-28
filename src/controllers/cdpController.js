@@ -54,9 +54,27 @@ export const createCdpCourse = async (req, res) => {
   }
 };
 
-export const getCdpCourses = async (_req, res) => {
+export const getCdpCourses = async (req, res) => {
   try {
-    const courses = await CdpCourse.find().sort({ createdAt: -1 });
+    const { category, duration } = req.query;
+    const filterQuery = {};
+
+    if (category) {
+      filterQuery.type = normalizeText(category).toLowerCase();
+    }
+
+    if (duration) {
+      const dur = normalizeText(duration).toLowerCase();
+      if (dur === 'short') {
+        filterQuery.timeInHr = { $lte: 5 };
+      } else if (dur === 'medium') {
+        filterQuery.timeInHr = { $gt: 5, $lte: 20 };
+      } else if (dur === 'long') {
+        filterQuery.timeInHr = { $gt: 20 };
+      }
+    }
+
+    const courses = await CdpCourse.find(filterQuery).sort({ createdAt: -1 });
     return res.json(courses);
   } catch (error) {
     return res.status(500).json({ error: error.message });
