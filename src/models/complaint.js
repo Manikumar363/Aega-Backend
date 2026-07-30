@@ -26,6 +26,13 @@ const complaintSchema = new mongoose.Schema({
   replyMessage: { type: String, default: null, trim: true },
   repliedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   repliedAt: { type: Date, default: null },
+  replies: [
+    {
+      replyMessage: { type: String, required: true },
+      repliedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+      repliedAt: { type: Date, default: Date.now }
+    }
+  ],
   createdAt: { type: Date, default: Date.now }
 });
 

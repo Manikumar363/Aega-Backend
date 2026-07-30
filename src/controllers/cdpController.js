@@ -5,6 +5,7 @@ const normalizeText = (value) => String(value || '').trim();
 const buildCoursePayload = (body, userId) => ({
   courseName: normalizeText(body.courseName),
   type: normalizeText(body.type).toLowerCase(),
+  courseFor: normalizeText(body.courseFor).toLowerCase(),
   timeInHr: Number(body.timeInHr),
   modules: Number(body.modules),
   hyperLink: normalizeText(body.hyperLink),
@@ -17,6 +18,7 @@ const getMissingCourseFields = (payload) => {
   const requiredChecks = [
     ['courseName', payload.courseName],
     ['type', payload.type],
+    ['courseFor', payload.courseFor],
     ['timeInHr', payload.timeInHr],
     ['modules', payload.modules],
     ['hyperLink', payload.hyperLink],
@@ -42,6 +44,10 @@ export const createCdpCourse = async (req, res) => {
       return res.status(400).json({ error: 'type must be mandatory or optional.' });
     }
 
+    if (!['agents', 'universities', 'b2b', 'b2c'].includes(payload.courseFor)) {
+      return res.status(400).json({ error: 'courseFor must be agents, universities, b2b, or b2c.' });
+    }
+
     const course = new CdpCourse(payload);
     await course.save();
 
@@ -56,11 +62,15 @@ export const createCdpCourse = async (req, res) => {
 
 export const getCdpCourses = async (req, res) => {
   try {
-    const { category, duration } = req.query;
+    const { category, duration, courseFor } = req.query;
     const filterQuery = {};
 
     if (category) {
       filterQuery.type = normalizeText(category).toLowerCase();
+    }
+
+    if (courseFor) {
+      filterQuery.courseFor = normalizeText(courseFor).toLowerCase();
     }
 
     if (duration) {
@@ -112,8 +122,13 @@ export const updateCdpCourse = async (req, res) => {
       return res.status(400).json({ error: 'type must be mandatory or optional.' });
     }
 
+    if (!['agents', 'universities', 'b2b', 'b2c'].includes(nextPayload.courseFor)) {
+      return res.status(400).json({ error: 'courseFor must be agents, universities, b2b, or b2c.' });
+    }
+
     course.courseName = nextPayload.courseName;
     course.type = nextPayload.type;
+    course.courseFor = nextPayload.courseFor;
     course.timeInHr = nextPayload.timeInHr;
     course.modules = nextPayload.modules;
     course.hyperLink = nextPayload.hyperLink;

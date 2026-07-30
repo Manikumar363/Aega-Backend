@@ -79,7 +79,10 @@ export const createComplaint = async (req, res) => {
 
 export const getComplaints = async (_req, res) => {
   try {
-    const complaints = await Complaint.find().sort({ createdAt: -1 });
+    const complaints = await Complaint.find()
+      .populate('repliedBy', 'firstName lastName email')
+      .populate('replies.repliedBy', 'firstName lastName email')
+      .sort({ createdAt: -1 });
     return res.json(complaints);
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -113,22 +116,64 @@ export const replyToComplaint = async (req, res) => {
       emailError = error.message;
     }
 
+    const newReply = {
+      replyMessage,
+      repliedBy: req.user.id,
+      repliedAt: new Date()
+    };
+
+    if (!complaint.replies) {
+      complaint.replies = [];
+    }
+    complaint.replies.push(newReply);
+
+    // Keep top-level fields for backward compatibility
     complaint.replyMessage = replyMessage;
     complaint.repliedBy = req.user.id;
-    complaint.repliedAt = new Date();
+    complaint.repliedAt = newReply.repliedAt;
     complaint.status = 'resolved';
+    
     await complaint.save();
+
+    const updated = await Complaint.findById(complaint._id)
+      .populate('repliedBy', 'firstName lastName email')
+      .populate('replies.repliedBy', 'firstName lastName email');
 
     return res.status(200).json({
       message: emailSent
         ? 'Complaint replied successfully and email sent.'
         : 'Complaint reply saved, but email could not be sent.',
-      complaint,
+      complaint: updated,
       email: {
         sent: emailSent,
         error: emailError
       }
     });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const updateComplaintStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['submitted', 'in-review', 'resolved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Invalid status.' });
+    }
+
+    const complaint = await Complaint.findById(req.params.complaintId);
+    if (!complaint) {
+      return res.status(404).json({ error: 'Complaint not found.' });
+    }
+
+    complaint.status = status;
+    await complaint.save();
+
+    const updated = await Complaint.findById(complaint._id)
+      .populate('repliedBy', 'firstName lastName email')
+      .populate('replies.repliedBy', 'firstName lastName email');
+
+    return res.json({ success: true, complaint: updated });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
@@ -184,6 +229,18 @@ export const raiseTargetComplaint = async (req, res) => {
       message: 'Complaint raised successfully by admin.',
       data: complaint
     });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const deleteComplaint = async (req, res) => {
+  try {
+    const complaint = await Complaint.findByIdAndDelete(req.params.complaintId);
+    if (!complaint) {
+      return res.status(404).json({ error: 'Complaint not found.' });
+    }
+    return res.status(200).json({ success: true, message: 'Complaint deleted successfully.' });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

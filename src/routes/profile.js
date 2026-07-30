@@ -6,7 +6,8 @@ import {
   updateMyAgentProfile,
   getMyComplianceSummary,
   getMyComplianceStatus,
-  getMyLocationCompliances
+  getMyLocationCompliances,
+  deleteMyAccount
 } from '../controllers/userController.js';
 import { requireAuth, requireAgentRole } from '../middleware/auth.js';
 
@@ -20,6 +21,8 @@ router.get('/me', requireAuth, requireAgentRole, getMyAgentProfile);
 router.put('/me', requireAuth, requireAgentRole, updateMyAgentProfile);
 router.get('/me/:userId', requireAuth, requireAgentRole, getMyAgentProfile);
 router.put('/me/:userId', requireAuth, requireAgentRole, updateMyAgentProfile);
+router.delete('/me', requireAuth, deleteMyAccount);
+router.delete('/me/:userId', requireAuth, deleteMyAccount);
 router.put('/reset-password', requireAuth, requireAgentRole, changeMyPassword);
 router.post('/documents', requireAuth, requireAgentRole, addMyProfileDocument);
 router.post('/documents/:userId', requireAuth, requireAgentRole, addMyProfileDocument);

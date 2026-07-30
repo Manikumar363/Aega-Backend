@@ -4,7 +4,8 @@ import {
   adminGetUniversityById,
   adminAcceptUniversity,
   adminRejectUniversity,
-  adminUpdateUniversity
+  adminUpdateUniversity,
+  deleteUniversity
 } from '../controllers/universityController.js';
 import { requireAuth, requireAdminRole } from '../middleware/auth.js';
 
@@ -15,5 +16,6 @@ router.get('/:universityId', requireAuth, requireAdminRole, adminGetUniversityBy
 router.put('/:universityId/accept', requireAuth, requireAdminRole, adminAcceptUniversity);
 router.put('/:universityId/reject', requireAuth, requireAdminRole, adminRejectUniversity);
 router.put('/:universityId', requireAuth, requireAdminRole, adminUpdateUniversity);
+router.delete('/:universityId', requireAuth, requireAdminRole, deleteUniversity);
 
 export default router;

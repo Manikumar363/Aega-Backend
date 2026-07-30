@@ -537,3 +537,78 @@ export const getAgentByIdForAdmin = async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 };
+
+export const adminUpdateAgent = async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const agent = await AgentProfile.findById(agentId);
+    if (!agent) {
+      return res.status(404).json({ error: 'Agent not found.' });
+    }
+
+    const user = await User.findById(agent.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'Linked user account not found.' });
+    }
+
+    const nextEmail = normalizeText(req.body.emailId).toLowerCase() || agent.emailId;
+    const emailOwner = await User.findOne({ email: nextEmail, _id: { $ne: user._id } });
+    if (emailOwner) {
+      return res.status(409).json({ error: 'Another user already exists with this email.' });
+    }
+
+    const nextFirstName = normalizeText(req.body.firstName) || agent.firstName;
+    const nextLastName = normalizeText(req.body.lastName) || agent.lastName;
+
+    agent.firstName = nextFirstName;
+    agent.lastName = nextLastName;
+    agent.emailId = nextEmail;
+    agent.mobileNumber = normalizeText(req.body.mobileNumber) || agent.mobileNumber;
+    agent.designation = normalizeText(req.body.designation) || agent.designation;
+    agent.office = normalizeText(req.body.office) || agent.office;
+    agent.country = normalizeText(req.body.country) || agent.country;
+    if (req.body.authorization) {
+      agent.authorization = normalizeAuthorization(req.body.authorization, agent.authorization.toObject?.() || agent.authorization);
+    }
+
+    user.firstName = nextFirstName;
+    user.lastName = nextLastName;
+    user.name = `${nextFirstName} ${nextLastName}`.trim();
+    user.email = nextEmail;
+    user.phone = agent.mobileNumber;
+    user.country = agent.country;
+    user.city = agent.office;
+
+    await user.save();
+    await agent.save();
+
+    const updatedUser = await User.findById(user._id).select('name email role createdAt');
+
+    return res.json({
+      message: 'Agent updated successfully.',
+      agent: buildAgentResponse(agent, updatedUser)
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const adminDeleteAgent = async (req, res) => {
+  try {
+    const { agentId } = req.params;
+    const agent = await AgentProfile.findById(agentId);
+    if (!agent) {
+      return res.status(404).json({ error: 'Agent not found.' });
+    }
+
+    await Promise.all([
+      AgentProfile.deleteOne({ _id: agent._id }),
+      User.deleteOne({ _id: agent.userId }),
+      Company.deleteMany({ agentId: agent.userId })
+    ]);
+
+    return res.json({ message: 'Agent deleted successfully.' });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};

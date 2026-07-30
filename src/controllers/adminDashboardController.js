@@ -52,3 +52,60 @@ export const getAdminDashboardStats = async (req, res) => {
     });
   }
 };
+
+export const searchEverything = async (req, res) => {
+  const { q } = req.query;
+  if (!q) {
+    return res.json({ success: true, data: { agents: [], universities: [], companies: [], students: [] } });
+  }
+
+  try {
+    const query = q.trim();
+    const regex = new RegExp(query, 'i');
+
+    const agents = await User.find({
+      role: 'agent',
+      $or: [
+        { firstName: regex },
+        { lastName: regex },
+        { email: regex }
+      ]
+    }).limit(10).select('firstName lastName email country office mobileNumber designation');
+
+    const universities = await User.find({
+      role: 'university',
+      $or: [
+        { universityName: regex },
+        { email: regex }
+      ]
+    }).limit(10).select('universityName email country city');
+
+    const companies = await Company.find({
+      $or: [
+        { companyName: regex },
+        { emailId: regex },
+        { founderName: regex }
+      ]
+    }).limit(10).select('companyName founderName emailId mobileNumber country office');
+
+    const students = await Student.find({
+      $or: [
+        { firstName: regex },
+        { lastName: regex },
+        { emailId: regex }
+      ]
+    }).limit(10).select('firstName lastName emailId mobileNumber preferredRegionAndCollege');
+
+    return res.json({
+      success: true,
+      data: {
+        agents,
+        universities,
+        companies,
+        students
+      }
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Search failed', error: err.message });
+  }
+};

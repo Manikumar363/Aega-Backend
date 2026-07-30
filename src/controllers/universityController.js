@@ -1,4 +1,5 @@
 import University from '../models/university.js';
+import User from '../models/user.js';
 
 export const listUniversities = async (req, res) => {
   try {
@@ -348,13 +349,31 @@ export const adminUpdateUniversity = async (req, res) => {
     const university = await University.findById(universityId);
     if (!university) return res.status(404).json({ success: false, message: 'University not found' });
 
-    // Only allow updating non-identity fields
-    const allowed = ['phone', 'website', 'region', 'country', 'city', 'logo', 'accreditation', 'coursesOffered', 'description', 'status'];
+    const allowed = ['phone', 'website', 'region', 'country', 'city', 'logo', 'accreditation', 'coursesOffered', 'description', 'status', 'name', 'email'];
     allowed.forEach((field) => {
       if (req.body[field] !== undefined) {
         university[field] = req.body[field];
       }
     });
+
+    if (university.userId) {
+      const user = await User.findById(university.userId);
+      if (user) {
+        if (req.body.name) {
+          user.name = req.body.name;
+          const parts = req.body.name.split(' ');
+          user.firstName = parts[0] || '';
+          user.lastName = parts.slice(1).join(' ') || '';
+        }
+        if (req.body.email) {
+          user.email = req.body.email;
+        }
+        if (req.body.phone) {
+          user.phone = req.body.phone;
+        }
+        await user.save();
+      }
+    }
 
     university.updatedAt = new Date();
     await university.save();

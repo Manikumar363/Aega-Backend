@@ -441,6 +441,19 @@ export const getEntityComplianceSummary = async (req, res) => {
       });
     }
 
+    // Check if any audits done
+    const auditsCount = await EntityAudit.countDocuments({ targetType, targetId });
+    if (auditsCount === 0) {
+      return res.status(200).json({
+        success: true,
+        data: {
+          overallScore: null,
+          activeIssues: 0,
+          riskLevel: 'N/A'
+        }
+      });
+    }
+
     let complianceScore = 100;
     let activeAlerts = 0;
     let riskLevel = 'LOW';
@@ -528,6 +541,12 @@ export const getEntityComplianceStatus = async (req, res) => {
 
     // 2. Fetch all latest check evaluations for this target
     const checks = await EntityAudit.find({ targetType, targetId }).lean();
+    if (checks.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: []
+      });
+    }
     const checksByCategory = {};
     checks.forEach(check => {
       checksByCategory[String(check.categoryId)] = check;

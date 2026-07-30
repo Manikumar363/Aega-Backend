@@ -1,4 +1,6 @@
 import Company from '../models/company.js';
+import User from '../models/user.js';
+import AgentProfile from '../models/agentProfile.js';
 
 const normalizeField = (value) => String(value || '').trim();
 const matrixKeys = [
@@ -64,7 +66,50 @@ export const getCompanies = async (req, res) => {
   try {
     const isAdmin = ['admin', 'sponsor'].includes(req.user.role);
     const query = isAdmin ? {} : { agentId: req.user.id };
+    
+    // Fetch Company records
     const companies = await Company.find(query).sort({ createdAt: -1 });
+    
+    if (isAdmin) {
+      // Fetch B2B/B2C User agents that act as companies
+      const users = await User.find({ role: 'agent', businessType: { $in: ['b2b', 'b2c'] } }).sort({ createdAt: -1 });
+      
+      const normalizedUsers = users.map((u) => ({
+        _id: u._id,
+        companyName: u.companyName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name,
+        founderName: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name,
+        emailId: u.email,
+        mobileNumber: u.phone || 'N/A',
+        designation: u.businessType === 'b2c' ? 'B2C' : 'B2B',
+        office: u.city || u.state || 'N/A',
+        country: u.country || 'N/A',
+        profileImage: u.profileImage || null,
+        isUserAgent: true,
+        createdAt: u.createdAt
+      }));
+
+      const normalizedCompanies = companies.map((c) => ({
+        _id: c._id,
+        companyName: c.companyName,
+        founderName: c.founderName,
+        emailId: c.emailId,
+        mobileNumber: c.mobileNumber,
+        designation: c.designation || 'B2B',
+        office: c.office,
+        country: c.country,
+        profileImage: null,
+        isUserAgent: false,
+        createdAt: c.createdAt
+      }));
+
+      // Merge and sort by createdAt descending
+      const merged = [...normalizedCompanies, ...normalizedUsers].sort((a, b) => {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+
+      return res.json(merged);
+    }
+
     return res.json(companies);
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -73,11 +118,32 @@ export const getCompanies = async (req, res) => {
 
 export const getCompanyOverview = async (req, res) => {
   try {
-    const company = await Company.findById(req.params.companyId)
+    let company = await Company.findById(req.params.companyId)
       .populate('agentId', 'firstName lastName name email role businessType');
 
     if (!company) {
-      return res.status(404).json({ error: 'Company not found.' });
+      // Fallback: check if it's a B2B/B2C agent User
+      const user = await User.findById(req.params.companyId);
+      if (!user || user.role !== 'agent' || !['b2b', 'b2c'].includes(user.businessType)) {
+        return res.status(404).json({ error: 'Company not found.' });
+      }
+
+      return res.json({
+        info: {
+          id: user._id,
+          companyName: user.companyName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name,
+          founderName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name,
+          emailId: user.email,
+          mobileNumber: user.phone || 'N/A',
+          designation: user.businessType === 'b2c' ? 'B2C' : 'B2B',
+          office: user.city || user.state || 'N/A',
+          country: user.country || 'N/A',
+          profileImage: user.profileImage || null,
+          createdAt: user.createdAt
+        },
+        agent: user,
+        performanceMatrix: null
+      });
     }
 
     const isAdmin = ['admin', 'sponsor'].includes(req.user.role);
@@ -93,7 +159,7 @@ export const getCompanyOverview = async (req, res) => {
         founderName: company.founderName,
         emailId: company.emailId,
         mobileNumber: company.mobileNumber,
-        designation: company.designation,
+        designation: company.designation || 'B2B',
         office: company.office,
         country: company.country,
         companyDocument1: company.companyDocument1,
@@ -171,6 +237,86 @@ export const updateCompanyPerformance = async (req, res) => {
       message: 'Performance matrix updated successfully.',
       performanceMatrix: company.performanceMatrix
     });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const adminUpdateCompany = async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    let company = await Company.findById(companyId);
+    if (!company) {
+      // Fallback: check if B2B/B2C user agent
+      const user = await User.findById(companyId);
+      if (user && user.role === 'agent' && ['b2b', 'b2c'].includes(user.businessType)) {
+        const name = normalizeField(req.body.founderName || req.body.companyName);
+        const nextFirstName = name.split(' ')[0] || user.firstName;
+        const nextLastName = name.split(' ').slice(1).join(' ') || user.lastName;
+        
+        user.firstName = nextFirstName;
+        user.lastName = nextLastName;
+        user.name = name || user.name;
+        user.email = normalizeField(req.body.emailId) || user.email;
+        user.phone = normalizeField(req.body.mobileNumber) || user.phone;
+        user.country = normalizeField(req.body.country) || user.country;
+        user.city = normalizeField(req.body.office) || user.city;
+        user.companyName = normalizeField(req.body.companyName) || user.companyName;
+        
+        await user.save();
+        
+        // Also update AgentProfile if it exists to keep in sync
+        const profile = await AgentProfile.findOne({ userId: user._id });
+        if (profile) {
+          profile.firstName = nextFirstName;
+          profile.lastName = nextLastName;
+          profile.emailId = user.email;
+          profile.mobileNumber = user.phone;
+          profile.country = user.country;
+          profile.office = user.city;
+          await profile.save();
+        }
+        
+        return res.json({ success: true, message: 'Company Agent updated successfully.', data: user });
+      }
+      return res.status(404).json({ error: 'Company not found.' });
+    }
+
+    company.companyName = normalizeField(req.body.companyName) || company.companyName;
+    company.founderName = normalizeField(req.body.founderName) || company.founderName;
+    company.emailId = normalizeField(req.body.emailId) || company.emailId;
+    company.mobileNumber = normalizeField(req.body.mobileNumber) || company.mobileNumber;
+    company.designation = normalizeField(req.body.designation) || company.designation;
+    company.office = normalizeField(req.body.office) || company.office;
+    company.country = normalizeField(req.body.country) || company.country;
+
+    await company.save();
+    return res.json({ success: true, message: 'Company updated successfully.', data: company });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const adminDeleteCompany = async (req, res) => {
+  try {
+    const { companyId } = req.params;
+    let company = await Company.findById(companyId);
+    if (!company) {
+      // Fallback: check if B2B/B2C user agent
+      const user = await User.findById(companyId);
+      if (user && user.role === 'agent' && ['b2b', 'b2c'].includes(user.businessType)) {
+        await Promise.all([
+          User.deleteOne({ _id: user._id }),
+          AgentProfile.deleteOne({ userId: user._id }),
+          Company.deleteMany({ agentId: user._id })
+        ]);
+        return res.json({ message: 'Company Agent deleted successfully.' });
+      }
+      return res.status(404).json({ error: 'Company not found.' });
+    }
+
+    await Company.deleteOne({ _id: company._id });
+    return res.json({ message: 'Company deleted successfully.' });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

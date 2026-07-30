@@ -78,7 +78,8 @@ export const enrollCourse = async (req, res) => {
       startDate: enrollmentStartDate,
       dueDate,
       notes: normalizeText(notes) || null,
-      status: 'on-going'
+      status: 'on-going',
+      progress: 3
     });
 
     await courseProgress.save();
@@ -209,18 +210,8 @@ export const updateCourseProgress = async (req, res) => {
       courseProgress.notes = normalizeText(notes);
     }
 
-    // Calculate progress percentage
-    const course = await CdpCourse.findById(courseProgress.courseId);
-    if (course) {
-      const daysTaken = Math.ceil(
-        (courseProgress.completionDate - courseProgress.startDate) / (1000 * 60 * 60 * 24)
-      );
-      const progressPercent = Math.min(
-        100,
-        Math.round((daysTaken / course.timeInHr) * 100)
-      );
-      courseProgress.progress = progressPercent;
-    }
+    // Set progress to 100% on completion
+    courseProgress.progress = 100;
 
     courseProgress.updatedAt = new Date();
     await courseProgress.save();
@@ -331,9 +322,11 @@ export const getTargetUserEnrolledCourses = async (req, res) => {
     }
 
     const courseProgressList = await CourseProgress.find({ userId: resolvedUserId })
-      .populate('courseId', 'courseName type timeInHr modules description coverPicture hyperLink')
-      .populate('userId', 'name email role')
+      .populate('courseId', 'courseName type timeInHr modules description coverPicture hyperLink courseFor')
+      .populate('userId', 'name email role businessType')
       .sort({ enrollmentDate: -1 });
+
+    const targetUser = await User.findById(resolvedUserId).select('role businessType name email');
 
     // Update status for each course based on due date
     const updatedCourses = courseProgressList.map((course) => {
@@ -347,6 +340,7 @@ export const getTargetUserEnrolledCourses = async (req, res) => {
     return res.json({
       success: true,
       data: updatedCourses,
+      targetUser,
       message: 'Enrolled courses for target user fetched successfully'
     });
   } catch (error) {

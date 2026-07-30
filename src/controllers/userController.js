@@ -7,6 +7,8 @@ import University from '../models/university.js';
 import EntityAudit from '../models/entityAudit.js';
 import AuditCategory from '../models/auditCategory.js';
 import CourseProgress from '../models/courseProgress.js';
+import Complaint from '../models/complaint.js';
+import Company from '../models/company.js';
 
 const normalizeText = (value) => String(value || '').trim();
 
@@ -312,11 +314,13 @@ export const loginUser = async (req, res) => {
 export const loginAdmin = async (req, res) => {
   const { email, password } = req.body;
   try {
-    const user = await User.findOne({ email, role: 'admin' });
-    if (!user) return res.status(401).json({ error: 'Invalid admin email or password.' });
+    const user = await User.findOne({ email });
+    if (!user || user.role !== 'admin') {
+      return res.status(401).json({ error: 'Unregistered EmailId' });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ error: 'Invalid admin email or password.' });
+    if (!isMatch) return res.status(401).json({ error: 'Invalid Credentials' });
 
     const token = buildAuthToken(user);
 
@@ -328,11 +332,79 @@ export const loginAdmin = async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
-        role: user.role
+        role: user.role,
+        profileImage: user.profileImage || null,
+        phone: user.phone || null,
+        dateOfBirth: user.dateOfBirth || null
       }
     });
   } catch (err) {
     res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+export const getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+    return res.json({
+      success: true,
+      data: {
+        id: user._id,
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        email: user.email,
+        role: user.role,
+        profileImage: user.profileImage || '',
+        phone: user.phone || '',
+        dateOfBirth: user.dateOfBirth || ''
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const updateMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    const { firstName, lastName, email, profileImage, phone, dateOfBirth } = req.body;
+
+    if (email && email.toLowerCase() !== user.email.toLowerCase()) {
+      const existing = await User.findOne({ email: email.toLowerCase(), _id: { $ne: user._id } });
+      if (existing) {
+        return res.status(409).json({ error: 'Another user already exists with this email.' });
+      }
+      user.email = email.toLowerCase();
+    }
+
+    if (firstName !== undefined) user.firstName = normalizeText(firstName);
+    if (lastName !== undefined) user.lastName = normalizeText(lastName);
+    if (firstName !== undefined || lastName !== undefined) {
+      user.name = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+    }
+    if (profileImage !== undefined) user.profileImage = normalizeText(profileImage);
+    if (phone !== undefined) user.phone = normalizeText(phone);
+    if (dateOfBirth !== undefined) user.dateOfBirth = normalizeText(dateOfBirth);
+
+    await user.save();
+
+    const userResponse = {
+      id: user._id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+      role: user.role,
+      profileImage: user.profileImage,
+      phone: user.phone,
+      dateOfBirth: user.dateOfBirth
+    };
+
+    return res.json({ success: true, user: userResponse });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
 };
 
@@ -868,5 +940,56 @@ export const getMyLocationCompliances = async (req, res) => {
       message: 'Error fetching location compliances.',
       error: error.message
     });
+  }
+};
+
+// DELETE: Self delete account (Agents, Companies, Universities)
+export const deleteMyAccount = async (req, res) => {
+  try {
+    const userId = req.params.userId || req.user.id;
+    
+    // Ensure the authenticated user is either deleting their own account or is admin
+    if (String(userId) !== String(req.user.id) && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'You are not authorized to delete this account.' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User account not found.' });
+    }
+
+    // Save deletion notification for the admin in Complaint collection
+    const notification = new Complaint({
+      targetType: user.role === 'university' ? 'university' : 'agent',
+      targetId: String(user._id),
+      firstName: user.firstName || 'User',
+      lastName: user.lastName || 'Deleted',
+      emailAddress: user.email,
+      phoneNumber: user.phone || 'N/A',
+      countryOfResidence: user.country || 'N/A',
+      agentNameOrCompany: user.companyName || user.name || 'N/A',
+      typeOfComplaint: 'Account Deletion Notification',
+      description: `The user ${user.name || user.email} has deleted their own account. All associated records have been removed automatically from the database.`,
+      acceptedDeclaration: true,
+      status: 'submitted'
+    });
+    await notification.save();
+
+    // Automatically remove associated database records
+    if (user.role === 'agent') {
+      await AgentProfile.deleteOne({ userId: user._id });
+      await Company.deleteMany({ agentId: user._id });
+    } else if (user.role === 'university') {
+      await University.deleteOne({ userId: user._id });
+    }
+
+    await User.deleteOne({ _id: user._id });
+
+    return res.json({
+      success: true,
+      message: 'Your account and associated records have been deleted successfully. The admin has been notified.'
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
 };

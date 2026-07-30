@@ -7,6 +7,7 @@ import {
   updateUniversity,
   getMyUniversity
 } from '../controllers/universityController.js';
+import { deleteMyAccount } from '../controllers/userController.js';
 
 const router = express.Router();
 
@@ -24,5 +25,8 @@ router.get('/:universityId', getUniversityById);
 
 // Auth: University self-service - update my profile
 router.put('/:universityId', requireAuth, updateUniversity);
+
+// Auth: University self-service - delete my account
+router.delete('/me', requireAuth, requireUniversityRole, deleteMyAccount);
 
 export default router;
