@@ -4,6 +4,7 @@ import AuditCategory from '../models/auditCategory.js';
 import AgentProfile from '../models/agentProfile.js';
 import Company from '../models/company.js';
 import University from '../models/university.js';
+import User from '../models/user.js';
 
 const SEVERITY_WEIGHTS = {
   low: 100,
@@ -41,11 +42,16 @@ const updateTargetEntityKPIs = async (targetType, targetId, newAuditScore) => {
   let targetProfile = null;
   if (mongoose.Types.ObjectId.isValid(targetId)) {
     if (targetType === 'agent') {
-      targetProfile = await AgentProfile.findById(targetId).select('complianceScore');
+      targetProfile = (await AgentProfile.findById(targetId).select('complianceScore')) ||
+                      (await AgentProfile.findOne({ userId: targetId }).select('complianceScore')) ||
+                      (await User.findById(targetId).select('complianceScore'));
     } else if (targetType === 'company') {
-      targetProfile = await Company.findById(targetId).select('complianceScore');
+      targetProfile = (await Company.findById(targetId).select('complianceScore')) ||
+                      (await User.findById(targetId).select('complianceScore')) ||
+                      (await AgentProfile.findById(targetId).select('complianceScore'));
     } else if (targetType === 'university') {
-      targetProfile = await University.findById(targetId).select('complianceScore');
+      targetProfile = (await University.findById(targetId).select('complianceScore')) ||
+                      (await User.findById(targetId).select('complianceScore'));
     }
   }
 
@@ -91,11 +97,27 @@ const updateTargetEntityKPIs = async (targetType, targetId, newAuditScore) => {
 
   if (mongoose.Types.ObjectId.isValid(targetId)) {
     if (targetType === 'agent') {
-      await AgentProfile.updateOne({ _id: targetId }, updatePayload);
+      const p = await AgentProfile.exists({ _id: targetId });
+      if (p) {
+        await AgentProfile.updateOne({ _id: targetId }, updatePayload);
+      } else {
+        await User.updateOne({ _id: targetId }, updatePayload);
+      }
     } else if (targetType === 'company') {
-      await Company.updateOne({ _id: targetId }, updatePayload);
+      const c = await Company.exists({ _id: targetId });
+      if (c) {
+        await Company.updateOne({ _id: targetId }, updatePayload);
+      } else {
+        await User.updateOne({ _id: targetId }, updatePayload);
+        await AgentProfile.updateOne({ _id: targetId }, updatePayload);
+      }
     } else if (targetType === 'university') {
-      await University.updateOne({ _id: targetId }, updatePayload);
+      const u = await University.exists({ _id: targetId });
+      if (u) {
+        await University.updateOne({ _id: targetId }, updatePayload);
+      } else {
+        await User.updateOne({ _id: targetId }, updatePayload);
+      }
     }
   }
 
@@ -143,11 +165,22 @@ export const submitAuditCheck = async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(targetId)) {
       targetExists = false;
       if (targetType === 'agent') {
-        targetExists = await AgentProfile.exists({ _id: targetId });
+        targetExists = Boolean(
+          (await AgentProfile.exists({ _id: targetId })) ||
+          (await AgentProfile.exists({ userId: targetId })) ||
+          (await User.exists({ _id: targetId }))
+        );
       } else if (targetType === 'company') {
-        targetExists = await Company.exists({ _id: targetId });
+        targetExists = Boolean(
+          (await Company.exists({ _id: targetId })) ||
+          (await User.exists({ _id: targetId })) ||
+          (await AgentProfile.exists({ _id: targetId }))
+        );
       } else if (targetType === 'university') {
-        targetExists = await University.exists({ _id: targetId });
+        targetExists = Boolean(
+          (await University.exists({ _id: targetId })) ||
+          (await User.exists({ _id: targetId }))
+        );
       }
     }
 

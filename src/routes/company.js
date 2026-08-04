@@ -3,7 +3,9 @@ import {
 	createCompany,
 	getCompanies,
 	getCompanyOverview,
-	updateCompanyPerformance
+	updateCompanyPerformance,
+	adminUpdateCompany,
+	adminDeleteCompany
 } from '../controllers/companyController.js';
 import { requireAuth, requireAgentRole, requireAdminRole } from '../middleware/auth.js';
 
@@ -13,5 +15,7 @@ router.post('/', requireAuth, requireAgentRole, createCompany);
 router.get('/', requireAuth, getCompanies);
 router.get('/:companyId/overview', requireAuth, getCompanyOverview);
 router.put('/:companyId/performance', requireAuth, requireAdminRole, updateCompanyPerformance);
+router.put('/:companyId', requireAuth, adminUpdateCompany);
+router.delete('/:companyId', requireAuth, adminDeleteCompany);
 
 export default router;

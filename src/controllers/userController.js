@@ -34,7 +34,8 @@ const buildAgentProfileResponse = (user) => ({
     documentName: doc.label,
     fileUrl: doc.path,
     originalName: doc.originalName || null,
-    uploadedAt: doc.uploadedAt || null
+    uploadedAt: doc.uploadedAt || null,
+    size: doc.size || null
   })),
   supportingDocuments: (user.documents || []).map((doc) => ({
     label: doc.label,
@@ -490,8 +491,8 @@ export const updateMyAgentProfile = async (req, res) => {
       user.businessType = rawBusinessType;
     }
 
-    if (profileImage) {
-      user.profileImage = profileImage;
+    if (req.body.hasOwnProperty('profileImage')) {
+      user.profileImage = req.body.profileImage ? normalizeText(req.body.profileImage) : null;
     }
 
     if (phone) {
@@ -591,10 +592,16 @@ export const changeMyPassword = async (req, res) => {
 
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) {
-      return res.status(401).json({ error: 'Current password is incorrect.' });
+      return res.status(401).json({ error: 'Incorrect Current Password' });
+    }
+
+    const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+[\]{};':",./<>?~`|\\-]).{8,}$/;
+    if (!strongPasswordRegex.test(newPassword)) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters and include uppercase, lowercase, numbers, and special characters.' });
     }
 
     user.password = newPassword;
+    user.markModified('password');
     await user.save();
 
     return res.json({ message: 'Password changed successfully.' });
@@ -612,6 +619,8 @@ export const addMyProfileDocument = async (req, res) => {
 
     const documentName = normalizeText(req.body.documentName);
     const fileUrl = normalizeText(req.body.fileUrl);
+    const originalName = normalizeText(req.body.originalName);
+    const size = req.body.size ? Number(req.body.size) : null;
 
     if (!documentName || !fileUrl) {
       return res.status(400).json({ error: 'documentName and fileUrl are required.' });
@@ -629,9 +638,9 @@ export const addMyProfileDocument = async (req, res) => {
     const nextDocuments = Array.isArray(user.documents) ? [...user.documents] : [];
     nextDocuments.push({
       label: documentName,
-      originalName: fileUrl.split('/').pop() || null,
+      originalName: originalName || fileUrl.split('/').pop() || null,
       mimeType: null,
-      size: null,
+      size: size || null,
       path: fileUrl
     });
 

@@ -1,6 +1,7 @@
 import Company from '../models/company.js';
 import User from '../models/user.js';
 import AgentProfile from '../models/agentProfile.js';
+import { sendAgentCredentialsEmail } from '../utils/mailer.js';
 
 const normalizeField = (value) => String(value || '').trim();
 const matrixKeys = [
@@ -33,7 +34,7 @@ export const createCompany = async (req, res) => {
     const companyData = {
       companyName: normalizeField(req.body.companyName),
       founderName: normalizeField(req.body.founderName),
-      emailId: normalizeField(req.body.emailId),
+      emailId: normalizeField(req.body.emailId).toLowerCase(),
       mobileNumber: normalizeField(req.body.mobileNumber),
       designation: normalizeField(req.body.designation),
       office: normalizeField(req.body.office),
@@ -50,14 +51,54 @@ export const createCompany = async (req, res) => {
       });
     }
 
+    // Duplicate email check across User and Company collections
+    const existingCompany = await Company.findOne({ emailId: companyData.emailId });
+    const existingUser = await User.findOne({ email: companyData.emailId });
+
+    if (existingCompany || existingUser) {
+      return res.status(400).json({
+        error: 'Company already exist with this emailid'
+      });
+    }
+
+    // Auto-generate temp password
+    const tempPassword = `Pass@${Math.floor(1000 + Math.random() * 9000)}`;
+
+    // Create linked User account for company
+    const user = new User({
+      companyName: companyData.companyName,
+      name: companyData.companyName,
+      firstName: companyData.founderName,
+      email: companyData.emailId,
+      phone: companyData.mobileNumber,
+      password: tempPassword,
+      role: 'agent',
+      businessType: 'b2b'
+    });
+    await user.save();
+
     const company = new Company(companyData);
     await company.save();
 
+    // Send credentials email
+    try {
+      await sendAgentCredentialsEmail({
+        email: companyData.emailId,
+        fullName: companyData.founderName || companyData.companyName,
+        password: tempPassword
+      });
+    } catch (emailErr) {
+      console.error('Failed to send credentials email:', emailErr.message);
+    }
+
     return res.status(201).json({
-      message: 'Company created successfully.',
+      message: 'Company added successfully',
       company
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ error: 'Company already exist with this emailid' });
+    }
     return res.status(500).json({ error: error.message });
   }
 };
@@ -291,6 +332,38 @@ export const adminUpdateCompany = async (req, res) => {
     company.country = normalizeField(req.body.country) || company.country;
 
     await company.save();
+
+    if (company.agentId) {
+      const user = await User.findById(company.agentId);
+      if (user) {
+        const name = company.founderName || company.companyName;
+        const nextFirstName = name.split(' ')[0] || user.firstName;
+        const nextLastName = name.split(' ').slice(1).join(' ') || user.lastName;
+
+        user.firstName = nextFirstName;
+        user.lastName = nextLastName;
+        user.name = name || user.name;
+        user.email = company.emailId || user.email;
+        user.phone = company.mobileNumber || user.phone;
+        user.country = company.country || user.country;
+        user.city = company.office || user.city;
+        user.companyName = company.companyName || user.companyName;
+
+        await user.save();
+
+        const profile = await AgentProfile.findOne({ userId: user._id });
+        if (profile) {
+          profile.firstName = nextFirstName;
+          profile.lastName = nextLastName;
+          profile.emailId = user.email;
+          profile.mobileNumber = user.phone;
+          profile.country = user.country;
+          profile.office = user.city;
+          await profile.save();
+        }
+      }
+    }
+
     return res.json({ success: true, message: 'Company updated successfully.', data: company });
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -313,6 +386,13 @@ export const adminDeleteCompany = async (req, res) => {
         return res.json({ message: 'Company Agent deleted successfully.' });
       }
       return res.status(404).json({ error: 'Company not found.' });
+    }
+
+    if (company.agentId) {
+      await Promise.all([
+        User.deleteOne({ _id: company.agentId }),
+        AgentProfile.deleteOne({ userId: company.agentId })
+      ]);
     }
 
     await Company.deleteOne({ _id: company._id });
