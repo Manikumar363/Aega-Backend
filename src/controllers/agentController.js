@@ -328,18 +328,15 @@ export const createAgent = async (req, res) => {
         activeAlerts: profile.activeAlerts !== undefined ? profile.activeAlerts : 0,
         riskLevel: profile.riskLevel || 'LOW'
       },
+      credentials: {
+        email: payload.emailId,
+        password: generatedPassword
+      },
       email: {
         sent: emailSent,
         error: emailError
       }
     };
-
-    if (!emailSent) {
-      baseResponse.credentials = {
-        email: payload.emailId,
-        password: generatedPassword
-      };
-    }
 
     return res.status(201).json(baseResponse);
   } catch (error) {
