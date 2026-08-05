@@ -4,6 +4,7 @@ import CdpCourse from '../models/cdpCourse.js';
 import AgentProfile from '../models/agentProfile.js';
 import University from '../models/university.js';
 import Company from '../models/company.js';
+import User from '../models/user.js';
 
 const normalizeText = (value) => String(value || '').trim();
 
@@ -295,38 +296,56 @@ export const getTargetUserEnrolledCourses = async (req, res) => {
       });
     }
 
-    let resolvedUserId = null;
+    const candidateUserIds = new Set();
+    const targetObjId = new mongoose.Types.ObjectId(targetId);
 
-    if (targetType === 'agent') {
-      const profile = await AgentProfile.findById(targetId).select('userId');
-      if (profile) resolvedUserId = profile.userId;
-    } else if (targetType === 'university') {
-      const university = await University.findById(targetId).select('userId');
-      if (university) resolvedUserId = university.userId;
-    } else if (targetType === 'company') {
-      const company = await Company.findById(targetId).select('agentId');
-      if (company) resolvedUserId = company.agentId;
-    } else {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid targetType. Must be agent, university, or company.'
-      });
+    // 1. Check if targetId itself is a User._id
+    const directUser = await User.findById(targetObjId).select('_id');
+    if (directUser) {
+      candidateUserIds.add(String(directUser._id));
     }
 
-    if (!resolvedUserId) {
-      return res.json({
-        success: true,
-        data: [],
-        message: 'No linked user account found for the target.'
-      });
+    // 2. Check AgentProfile (by _id or by userId)
+    const agentProfile = await AgentProfile.findOne({
+      $or: [{ _id: targetObjId }, { userId: targetObjId }]
+    }).select('userId _id');
+    if (agentProfile) {
+      if (agentProfile.userId) candidateUserIds.add(String(agentProfile.userId));
+      candidateUserIds.add(String(agentProfile._id));
     }
 
-    const courseProgressList = await CourseProgress.find({ userId: resolvedUserId })
+    // 3. Check Company (by _id or by agentId)
+    const company = await Company.findOne({
+      $or: [{ _id: targetObjId }, { agentId: targetObjId }]
+    }).select('agentId _id');
+    if (company) {
+      if (company.agentId) candidateUserIds.add(String(company.agentId));
+      candidateUserIds.add(String(company._id));
+    }
+
+    // 4. Check University (by _id or by userId)
+    const university = await University.findOne({
+      $or: [{ _id: targetObjId }, { userId: targetObjId }]
+    }).select('userId _id');
+    if (university) {
+      if (university.userId) candidateUserIds.add(String(university.userId));
+      candidateUserIds.add(String(university._id));
+    }
+
+    // Always include targetId in candidate IDs
+    candidateUserIds.add(String(targetId));
+
+    const userIdsArray = Array.from(candidateUserIds)
+      .filter(id => mongoose.Types.ObjectId.isValid(id))
+      .map(id => new mongoose.Types.ObjectId(id));
+
+    const courseProgressList = await CourseProgress.find({ userId: { $in: userIdsArray } })
       .populate('courseId', 'courseName type timeInHr modules description coverPicture hyperLink courseFor')
       .populate('userId', 'name email role businessType')
       .sort({ enrollmentDate: -1 });
 
-    const targetUser = await User.findById(resolvedUserId).select('role businessType name email');
+    const primaryUserId = Array.from(candidateUserIds)[0];
+    const targetUser = await User.findById(primaryUserId).select('role businessType name email');
 
     // Update status for each course based on due date
     const updatedCourses = courseProgressList.map((course) => {

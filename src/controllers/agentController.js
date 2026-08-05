@@ -239,26 +239,22 @@ export const rejectUniversityRequest = async (req, res) => reviewUniversityReque
 export const createAgent = async (req, res) => {
   try {
     const payload = {
-      firstName: normalizeText(req.body.firstName),
+      firstName: normalizeText(req.body.firstName || req.body.companyName),
       lastName: normalizeText(req.body.lastName),
-      emailId: normalizeText(req.body.emailId).toLowerCase(),
-      mobileNumber: normalizeText(req.body.mobileNumber),
+      emailId: normalizeText(req.body.emailId || req.body.email).toLowerCase(),
+      mobileNumber: normalizeText(req.body.mobileNumber || req.body.mobile),
       designation: normalizeText(req.body.designation),
       office: normalizeText(req.body.office),
       country: normalizeText(req.body.country)
     };
 
-    const requiredFields = Object.entries(payload)
-      .filter(([, value]) => !value)
-      .map(([field]) => field);
-
-    if (requiredFields.length > 0) {
-      return res.status(400).json({ error: `Missing required fields: ${requiredFields.join(', ')}` });
+    if (!payload.firstName || !payload.emailId || !payload.mobileNumber || !payload.designation || !payload.office || !payload.country) {
+      return res.status(400).json({ error: 'Please fill in all mandatory fields.' });
     }
 
     const existingUser = await User.findOne({ email: payload.emailId });
     if (existingUser) {
-      return res.status(409).json({ error: 'Agent already exists with this email.' });
+      return res.status(409).json({ error: 'Agent already exist with this emailid' });
     }
 
     const authorization = normalizeAuthorization(req.body.authorization);
@@ -301,20 +297,21 @@ export const createAgent = async (req, res) => {
     let emailError = null;
 
     try {
-      await sendAgentCredentialsEmail({
-        email: payload.emailId,
-        fullName: `${payload.firstName} ${payload.lastName}`.trim(),
-        password: generatedPassword
-      });
+      await Promise.race([
+        sendAgentCredentialsEmail({
+          email: payload.emailId,
+          fullName: `${payload.firstName} ${payload.lastName}`.trim(),
+          password: generatedPassword
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Email send timeout')), 2500))
+      ]);
     } catch (error) {
       emailSent = false;
       emailError = error.message;
     }
 
     const baseResponse = {
-      message: emailSent
-        ? 'Agent created successfully and credentials email sent.'
-        : 'Agent created successfully, but credential email could not be sent.',
+      message: 'Agent added successfully',
       agent: {
         id: profile._id,
         userId: user._id,
@@ -337,8 +334,6 @@ export const createAgent = async (req, res) => {
       }
     };
 
-    // If email couldn't be sent, include plaintext credentials in response so the creator
-    // can copy them and share with the counsellor manually.
     if (!emailSent) {
       baseResponse.credentials = {
         email: payload.emailId,
@@ -374,16 +369,20 @@ const buildAgentResponse = (profile, user) => ({
         id: user._id,
         email: user.email,
         role: user.role,
-        name: user.name
+        name: user.name,
+        avatar: user.avatar || user.profilePic || null
       }
     : null
 });
 
 export const getAgents = async (req, res) => {
   try {
-    const agents = await AgentProfile.find({ createdBy: req.user.id })
+    const agents = await AgentProfile.find({
+      createdBy: req.user.id,
+      userId: { $ne: req.user.id }
+    })
       .sort({ createdAt: -1 })
-      .populate('userId', 'name email role createdAt');
+      .populate('userId', 'name email role avatar profilePic createdAt');
 
     return res.json(
       agents.map((agent) => buildAgentResponse(agent, agent.userId))

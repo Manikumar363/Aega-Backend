@@ -17,13 +17,52 @@ const mapSeverityToWeight = (severity) => {
   return SEVERITY_WEIGHTS[normalized] || SEVERITY_WEIGHTS.low;
 };
 
+const resolveCandidateTargetIds = async (targetId) => {
+  const candidateIds = new Set();
+  if (targetId) candidateIds.add(String(targetId));
+
+  if (mongoose.Types.ObjectId.isValid(targetId)) {
+    const targetObjId = new mongoose.Types.ObjectId(targetId);
+
+    const user = await User.findById(targetObjId);
+    if (user) candidateIds.add(String(user._id));
+
+    const company = await Company.findOne({
+      $or: [{ _id: targetObjId }, { agentId: targetObjId }]
+    });
+    if (company) {
+      candidateIds.add(String(company._id));
+      if (company.agentId) candidateIds.add(String(company.agentId));
+    }
+
+    const agentProfile = await AgentProfile.findOne({
+      $or: [{ _id: targetObjId }, { userId: targetObjId }]
+    });
+    if (agentProfile) {
+      candidateIds.add(String(agentProfile._id));
+      if (agentProfile.userId) candidateIds.add(String(agentProfile.userId));
+    }
+
+    const university = await University.findOne({
+      $or: [{ _id: targetObjId }, { userId: targetObjId }]
+    });
+    if (university) {
+      candidateIds.add(String(university._id));
+      if (university.userId) candidateIds.add(String(university.userId));
+    }
+  }
+
+  return Array.from(candidateIds);
+};
+
 // Recalculates and updates compliance metrics on the target entity document
 const updateTargetEntityKPIs = async (targetType, targetId, newAuditScore) => {
+  const candidateIds = await resolveCandidateTargetIds(targetId);
   // 1. Get total number of audits completed for this target
-  const numberOfAudits = await EntityAudit.countDocuments({ targetType, targetId });
+  const numberOfAudits = await EntityAudit.countDocuments({ targetId: { $in: candidateIds } });
 
   // 2. Fetch all audits to compute score/alerts based on the latest check per category
-  const allAudits = await EntityAudit.find({ targetType, targetId }).lean();
+  const allAudits = await EntityAudit.find({ targetId: { $in: candidateIds } }).lean();
   
   const latestByCategory = {};
   allAudits.forEach(audit => {
@@ -202,30 +241,20 @@ export const submitAuditCheck = async (req, res) => {
 
     // Map answers and calculate score
     let sumScores = 0;
-
     const processedAnswers = answers.map((ans) => {
       const criterion = category.criteria.id(ans.criterionId);
       if (!criterion) {
-        throw new Error(`Criterion with ID "${ans.criterionId}" does not exist in category "${category.name}".`);
+        throw new Error(`Criterion with ID "${ans.criterionId}" does not exist in this category.`);
       }
 
-      const severity = ans.severity || criterion.severity || 'low';
-      const normalizedSeverity = String(severity).toLowerCase().trim();
+      const normalizedSeverity = ans.severity ? String(ans.severity).toLowerCase().trim() : criterion.severity;
+      const weight = mapSeverityToWeight(normalizedSeverity);
+      const isCompliant = ans.status === 'compliant';
+      const finalStatus = isCompliant ? 'compliant' : 'non-compliant';
 
-      const ansStatus = String(ans.status || 'compliant').toLowerCase().trim();
-      let levelScore = 100;
-      let finalStatus = 'compliant';
-
-      if (ansStatus === 'non-compliant') {
-        finalStatus = 'non-compliant';
-        if (normalizedSeverity === 'high') {
-          levelScore = 33.33;
-        } else {
-          levelScore = 66.66;
-        }
+      if (isCompliant) {
+        sumScores += weight;
       }
-
-      sumScores += levelScore;
 
       return {
         criterionId: ans.criterionId,
@@ -240,9 +269,6 @@ export const submitAuditCheck = async (req, res) => {
     const complianceScore = processedAnswers.length > 0
       ? Math.round((sumScores / processedAnswers.length) * 100) / 100
       : 100;
-
-    // Keep historical audits and disable deletion to allow audit counts to accumulate
-    // await EntityAudit.deleteMany({ targetType, targetId, categoryId });
 
     const auditCheck = new EntityAudit({
       targetType,
@@ -303,7 +329,8 @@ export const getAuditChecks = async (req, res) => {
       }
     }
 
-    const checks = await EntityAudit.find({ targetType: resolvedTargetType, targetId: resolvedTargetId })
+    const candidateIds = await resolveCandidateTargetIds(resolvedTargetId);
+    const checks = await EntityAudit.find({ targetId: { $in: candidateIds } })
       .sort({ createdAt: -1 })
       .populate('auditedBy', 'name email role')
       .lean();
@@ -387,70 +414,70 @@ export const getEntityAuditSummary = async (req, res) => {
       }
     }
 
-    // Attempt to read from the profile document directly for fast performance (only if resolvedTargetId is a valid ObjectId)
+    const candidateIds = await resolveCandidateTargetIds(resolvedTargetId);
     let profile = null;
+
     if (mongoose.Types.ObjectId.isValid(resolvedTargetId)) {
       if (resolvedTargetType === 'agent') {
-        profile = await AgentProfile.findById(resolvedTargetId).select('complianceScore numberOfAudits activeAlerts riskLevel');
+        profile = await AgentProfile.findOne({ _id: { $in: candidateIds } }).select('complianceScore numberOfAudits activeAlerts riskLevel');
       } else if (resolvedTargetType === 'company') {
-        profile = await Company.findById(resolvedTargetId).select('complianceScore numberOfAudits activeAlerts riskLevel');
+        profile = await Company.findOne({ _id: { $in: candidateIds } }).select('complianceScore numberOfAudits activeAlerts riskLevel');
       } else if (resolvedTargetType === 'university') {
-        profile = await University.findById(resolvedTargetId).select('complianceScore numberOfAudits activeAlerts riskLevel');
+        profile = await University.findOne({ _id: { $in: candidateIds } }).select('complianceScore numberOfAudits activeAlerts riskLevel');
       }
     }
 
-    if (!profile) {
-      // If profile document does not exist or is a mock target, compute dynamically from EntityAudit checks
-      const allAudits = await EntityAudit.find({ targetType: resolvedTargetType, targetId: resolvedTargetId }).lean();
-      
-      const latestByCategory = {};
-      allAudits.forEach(audit => {
-        const catIdStr = String(audit.categoryId);
-        if (!latestByCategory[catIdStr] || latestByCategory[catIdStr].createdAt < audit.createdAt) {
-          latestByCategory[catIdStr] = audit;
-        }
-      });
+    const allAudits = await EntityAudit.find({ targetId: { $in: candidateIds } }).lean();
 
-      const latestAudits = Object.values(latestByCategory);
-      const sumScore = latestAudits.reduce((acc, a) => acc + a.complianceScore, 0);
-      const overallScore = latestAudits.length > 0 
-        ? Math.round((sumScore / latestAudits.length) * 100) / 100 
-        : 100;
-
-      let activeAlerts = 0;
-      latestAudits.forEach(audit => {
-        (audit.answers || []).forEach(ans => {
-          if (ans.status === 'non-compliant') {
-            activeAlerts += 1;
-          }
-        });
-      });
-
-      let riskLevel = 'LOW';
-      if (overallScore < 33.33) {
-        riskLevel = 'HIGH';
-      } else if (overallScore >= 33.33 && overallScore <= 66.66) {
-        riskLevel = 'MEDIUM';
-      }
-
+    if (!profile && allAudits.length === 0) {
       return res.status(200).json({
         success: true,
         data: {
-          complianceScore: overallScore,
-          numberOfAudits: allAudits.length,
-          activeAlerts,
-          riskLevel
+          complianceScore: 100,
+          numberOfAudits: 0,
+          activeAlerts: 0,
+          riskLevel: 'LOW'
         }
       });
+    }
+
+    const latestByCategory = {};
+    allAudits.forEach(audit => {
+      const catIdStr = String(audit.categoryId);
+      if (!latestByCategory[catIdStr] || latestByCategory[catIdStr].createdAt < audit.createdAt) {
+        latestByCategory[catIdStr] = audit;
+      }
+    });
+
+    const latestAudits = Object.values(latestByCategory);
+    const sumScore = latestAudits.reduce((acc, a) => acc + a.complianceScore, 0);
+    const overallScore = latestAudits.length > 0 
+      ? Math.round((sumScore / latestAudits.length) * 100) / 100 
+      : (profile?.complianceScore ?? 100);
+
+    let activeAlerts = 0;
+    latestAudits.forEach(audit => {
+      (audit.answers || []).forEach(ans => {
+        if (ans.status === 'non-compliant') {
+          activeAlerts += 1;
+        }
+      });
+    });
+
+    let riskLevel = 'LOW';
+    if (overallScore < 33.33) {
+      riskLevel = 'HIGH';
+    } else if (overallScore >= 33.33 && overallScore <= 66.66) {
+      riskLevel = 'MEDIUM';
     }
 
     return res.status(200).json({
       success: true,
       data: {
-        complianceScore: profile.complianceScore ?? 100,
-        numberOfAudits: profile.numberOfAudits ?? 0,
-        activeAlerts: profile.activeAlerts ?? 0,
-        riskLevel: profile.riskLevel ?? 'LOW'
+        complianceScore: overallScore,
+        numberOfAudits: allAudits.length || (profile?.numberOfAudits ?? 0),
+        activeAlerts,
+        riskLevel
       }
     });
   } catch (error) {
@@ -474,75 +501,57 @@ export const getEntityComplianceSummary = async (req, res) => {
       });
     }
 
-    // Check if any audits done
-    const auditsCount = await EntityAudit.countDocuments({ targetType, targetId });
+    const candidateIds = await resolveCandidateTargetIds(targetId);
+    const auditsCount = await EntityAudit.countDocuments({ targetId: { $in: candidateIds } });
     if (auditsCount === 0) {
       return res.status(200).json({
         success: true,
         data: {
-          overallScore: null,
+          overallScore: 100,
+          numberOfAudits: 0,
           activeIssues: 0,
-          riskLevel: 'N/A'
+          riskLevel: 'LOW'
         }
       });
     }
 
-    let complianceScore = 100;
+    const allAudits = await EntityAudit.find({ targetId: { $in: candidateIds } }).lean();
+    
+    const latestByCategory = {};
+    allAudits.forEach(audit => {
+      const catIdStr = String(audit.categoryId);
+      if (!latestByCategory[catIdStr] || latestByCategory[catIdStr].createdAt < audit.createdAt) {
+        latestByCategory[catIdStr] = audit;
+      }
+    });
+
+    const latestAudits = Object.values(latestByCategory);
+    const sumScore = latestAudits.reduce((acc, a) => acc + a.complianceScore, 0);
+    const complianceScore = latestAudits.length > 0 
+      ? Math.round((sumScore / latestAudits.length) * 100) / 100 
+      : 100;
+
     let activeAlerts = 0;
-    let riskLevel = 'LOW';
-
-    if (mongoose.Types.ObjectId.isValid(targetId)) {
-      let profile = null;
-      if (targetType === 'agent') {
-        profile = await AgentProfile.findById(targetId).select('complianceScore activeAlerts riskLevel');
-      } else if (targetType === 'company') {
-        profile = await Company.findById(targetId).select('complianceScore activeAlerts riskLevel');
-      } else if (targetType === 'university') {
-        profile = await University.findById(targetId).select('complianceScore activeAlerts riskLevel');
-      }
-
-      if (profile) {
-        complianceScore = profile.complianceScore ?? 100;
-        activeAlerts = profile.activeAlerts ?? 0;
-        riskLevel = profile.riskLevel ?? 'LOW';
-      }
-    } else {
-      // For mock ID (e.g. "1"), dynamically compute from EntityAudit checks
-      const allAudits = await EntityAudit.find({ targetType, targetId }).lean();
-      
-      const latestByCategory = {};
-      allAudits.forEach(audit => {
-        const catIdStr = String(audit.categoryId);
-        if (!latestByCategory[catIdStr] || latestByCategory[catIdStr].createdAt < audit.createdAt) {
-          latestByCategory[catIdStr] = audit;
+    latestAudits.forEach(audit => {
+      (audit.answers || []).forEach(ans => {
+        if (ans.status === 'non-compliant') {
+          activeAlerts += 1;
         }
       });
+    });
 
-      const latestAudits = Object.values(latestByCategory);
-      const sumScore = latestAudits.reduce((acc, a) => acc + a.complianceScore, 0);
-      complianceScore = latestAudits.length > 0 
-        ? Math.round((sumScore / latestAudits.length) * 100) / 100 
-        : 100;
-
-      latestAudits.forEach(audit => {
-        (audit.answers || []).forEach(ans => {
-          if (ans.status === 'non-compliant') {
-            activeAlerts += 1;
-          }
-        });
-      });
-
-      if (complianceScore < 33.33) {
-        riskLevel = 'HIGH';
-      } else if (complianceScore >= 33.33 && complianceScore <= 66.66) {
-        riskLevel = 'MEDIUM';
-      }
+    let riskLevel = 'LOW';
+    if (complianceScore < 33.33) {
+      riskLevel = 'HIGH';
+    } else if (complianceScore >= 33.33 && complianceScore <= 66.66) {
+      riskLevel = 'MEDIUM';
     }
 
     return res.status(200).json({
       success: true,
       data: {
         overallScore: complianceScore,
+        numberOfAudits: allAudits.length,
         activeIssues: activeAlerts,
         riskLevel
       }
@@ -572,17 +581,27 @@ export const getEntityComplianceStatus = async (req, res) => {
     const categoriesTarget = targetType === 'university' ? 'university' : 'agent';
     const categories = await AuditCategory.find({ target: categoriesTarget }).lean();
 
-    // 2. Fetch all latest check evaluations for this target
-    const checks = await EntityAudit.find({ targetType, targetId }).lean();
+    // 2. Fetch all latest check evaluations for candidate target IDs
+    const candidateIds = await resolveCandidateTargetIds(targetId);
+    const checks = await EntityAudit.find({ targetId: { $in: candidateIds } }).lean();
     if (checks.length === 0) {
       return res.status(200).json({
         success: true,
-        data: []
+        data: categories.map((cat, idx) => ({
+          id: idx + 1,
+          categoryId: cat._id,
+          name: cat.name,
+          status: 'Pending'
+        }))
       });
     }
+
     const checksByCategory = {};
     checks.forEach(check => {
-      checksByCategory[String(check.categoryId)] = check;
+      const catIdStr = String(check.categoryId);
+      if (!checksByCategory[catIdStr] || checksByCategory[catIdStr].createdAt < check.createdAt) {
+        checksByCategory[catIdStr] = check;
+      }
     });
 
     // 3. Map categories to their compliance status: Compliant, Non-Compliant, or Pending
