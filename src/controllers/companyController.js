@@ -93,7 +93,11 @@ export const createCompany = async (req, res) => {
 
     return res.status(201).json({
       message: 'Company added successfully',
-      company
+      company,
+      credentials: {
+        email: companyData.emailId,
+        password: tempPassword
+      }
     });
   } catch (error) {
     if (error.code === 11000) {

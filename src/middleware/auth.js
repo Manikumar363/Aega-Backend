@@ -26,8 +26,8 @@ export const requireAgentRole = (req, res, next) => {
 };
 
 export const requireCounsellorRole = (req, res, next) => {
-  if (!req.user || req.user.role !== 'counsellor') {
-    return res.status(403).json({ error: 'Counsellor access required.' });
+  if (!req.user || (req.user.role !== 'counsellor' && req.user.role !== 'agent')) {
+    return res.status(403).json({ error: 'Counsellor or agent access required.' });
   }
 
   return next();

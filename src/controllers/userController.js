@@ -275,10 +275,14 @@ export const loginUser = async (req, res) => {
   const { email, password, role } = req.body;
   try {
     const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ error: 'Unregistered emailID' });
+    // Assert role match (agents created as counsellor or agent both map to agent role tab)
+    const isRoleMatch =
+      !role ||
+      user.role === role ||
+      (role === 'agent' && (user.role === 'counsellor' || user.role === 'agent')) ||
+      (role === 'counsellor' && (user.role === 'agent' || user.role === 'counsellor'));
 
-    // Assert role match
-    if (role && user.role !== role) {
+    if (!isRoleMatch) {
       return res.status(401).json({ error: 'Unregistered emailID' });
     }
 

@@ -17,8 +17,9 @@ const authorizationSchema = new mongoose.Schema(
 
 const agentProfileSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
-  firstName: { type: String, required: true, trim: true },
-  lastName: { type: String, required: true, trim: true },
+  fullName: { type: String, trim: true },
+  firstName: { type: String, trim: true, default: '' },
+  lastName: { type: String, trim: true, default: '' },
   emailId: { type: String, required: true, trim: true },
   mobileNumber: { type: String, required: true, trim: true },
   designation: { type: String, required: true, trim: true },

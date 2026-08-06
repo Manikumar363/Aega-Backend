@@ -238,9 +238,15 @@ export const rejectUniversityRequest = async (req, res) => reviewUniversityReque
 
 export const createAgent = async (req, res) => {
   try {
+    const rawFullName = normalizeText(req.body.fullName || req.body.name || req.body.companyName || req.body.firstName);
+    const nameParts = rawFullName ? rawFullName.split(' ') : [];
+    const firstName = nameParts[0] || rawFullName || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
     const payload = {
-      firstName: normalizeText(req.body.firstName || req.body.companyName),
-      lastName: normalizeText(req.body.lastName),
+      fullName: rawFullName,
+      firstName,
+      lastName,
       emailId: normalizeText(req.body.emailId || req.body.email).toLowerCase(),
       mobileNumber: normalizeText(req.body.mobileNumber || req.body.mobile),
       designation: normalizeText(req.body.designation),
@@ -248,7 +254,7 @@ export const createAgent = async (req, res) => {
       country: normalizeText(req.body.country)
     };
 
-    if (!payload.firstName || !payload.emailId || !payload.mobileNumber || !payload.designation || !payload.office || !payload.country) {
+    if (!payload.fullName || !payload.emailId || !payload.mobileNumber || !payload.designation || !payload.office || !payload.country) {
       return res.status(400).json({ error: 'Please fill in all mandatory fields.' });
     }
 
@@ -264,10 +270,10 @@ export const createAgent = async (req, res) => {
     const user = new User({
       firstName: payload.firstName,
       lastName: payload.lastName,
-      name: `${payload.firstName} ${payload.lastName}`.trim(),
+      name: payload.fullName,
       email: payload.emailId,
       password: generatedPassword,
-      role: 'counsellor',
+      role: 'agent',
       businessType: req.user.businessType || null
     });
 
@@ -275,6 +281,7 @@ export const createAgent = async (req, res) => {
 
     const profile = new AgentProfile({
       userId: user._id,
+      fullName: payload.fullName,
       firstName: payload.firstName,
       lastName: payload.lastName,
       emailId: payload.emailId,
@@ -300,7 +307,7 @@ export const createAgent = async (req, res) => {
       await Promise.race([
         sendAgentCredentialsEmail({
           email: payload.emailId,
-          fullName: `${payload.firstName} ${payload.lastName}`.trim(),
+          fullName: payload.fullName,
           password: generatedPassword
         }),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Email send timeout')), 2500))
@@ -315,6 +322,7 @@ export const createAgent = async (req, res) => {
       agent: {
         id: profile._id,
         userId: user._id,
+        fullName: profile.fullName,
         firstName: profile.firstName,
         lastName: profile.lastName,
         emailId: profile.emailId,
@@ -344,33 +352,38 @@ export const createAgent = async (req, res) => {
   }
 };
 
-const buildAgentResponse = (profile, user) => ({
-  id: profile._id,
-  userId: user?._id || profile.userId,
-  firstName: profile.firstName,
-  lastName: profile.lastName,
-  emailId: profile.emailId,
-  mobileNumber: profile.mobileNumber,
-  designation: profile.designation,
-  office: profile.office,
-  country: profile.country,
-  authorization: profile.authorization,
-  complianceScore: profile.complianceScore !== undefined ? profile.complianceScore : 100,
-  numberOfAudits: profile.numberOfAudits !== undefined ? profile.numberOfAudits : 0,
-  activeAlerts: profile.activeAlerts !== undefined ? profile.activeAlerts : 0,
-  riskLevel: profile.riskLevel || 'LOW',
-  createdAt: profile.createdAt,
-  createdBy: profile.createdBy,
-  user: user
-    ? {
-        id: user._id,
-        email: user.email,
-        role: user.role,
-        name: user.name,
-        avatar: user.avatar || user.profilePic || null
-      }
-    : null
-});
+const buildAgentResponse = (profile, user) => {
+  const nameStr = profile.fullName || user?.name || `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || 'Agent';
+  return {
+    id: profile._id,
+    userId: user?._id || profile.userId,
+    fullName: nameStr,
+    name: nameStr,
+    firstName: profile.firstName || nameStr,
+    lastName: profile.lastName || '',
+    emailId: profile.emailId,
+    mobileNumber: profile.mobileNumber,
+    designation: profile.designation,
+    office: profile.office,
+    country: profile.country,
+    authorization: profile.authorization,
+    complianceScore: profile.complianceScore !== undefined ? profile.complianceScore : 100,
+    numberOfAudits: profile.numberOfAudits !== undefined ? profile.numberOfAudits : 0,
+    activeAlerts: profile.activeAlerts !== undefined ? profile.activeAlerts : 0,
+    riskLevel: profile.riskLevel || 'LOW',
+    createdAt: profile.createdAt,
+    createdBy: profile.createdBy,
+    user: user
+      ? {
+          id: user._id,
+          email: user.email,
+          role: user.role,
+          name: user.name,
+          avatar: user.avatar || user.profilePic || null
+        }
+      : null
+  };
+};
 
 export const getAgents = async (req, res) => {
   try {
@@ -416,19 +429,29 @@ export const updateAgent = async (req, res) => {
       return res.status(404).json({ error: 'Linked user account not found.' });
     }
 
-    const nextEmail = normalizeText(req.body.emailId).toLowerCase() || agent.emailId;
+    const nextEmail = normalizeText(req.body.emailId || req.body.email).toLowerCase() || agent.emailId;
     const emailOwner = await User.findOne({ email: nextEmail, _id: { $ne: user._id } });
     if (emailOwner) {
       return res.status(409).json({ error: 'Another user already exists with this email.' });
     }
 
-    const nextFirstName = normalizeText(req.body.firstName) || agent.firstName;
-    const nextLastName = normalizeText(req.body.lastName) || agent.lastName;
+    const rawFullName = normalizeText(req.body.fullName || req.body.name || req.body.companyName || req.body.firstName);
+    let nextFirstName = agent.firstName;
+    let nextLastName = agent.lastName;
+    let nextFullName = agent.fullName || `${agent.firstName || ''} ${agent.lastName || ''}`.trim();
 
+    if (rawFullName) {
+      nextFullName = rawFullName;
+      const parts = rawFullName.split(' ');
+      nextFirstName = parts[0] || rawFullName;
+      nextLastName = parts.slice(1).join(' ') || '';
+    }
+
+    agent.fullName = nextFullName;
     agent.firstName = nextFirstName;
     agent.lastName = nextLastName;
     agent.emailId = nextEmail;
-    agent.mobileNumber = normalizeText(req.body.mobileNumber) || agent.mobileNumber;
+    agent.mobileNumber = normalizeText(req.body.mobileNumber || req.body.mobile) || agent.mobileNumber;
     agent.designation = normalizeText(req.body.designation) || agent.designation;
     agent.office = normalizeText(req.body.office) || agent.office;
     agent.country = normalizeText(req.body.country) || agent.country;
@@ -436,7 +459,7 @@ export const updateAgent = async (req, res) => {
 
     user.firstName = nextFirstName;
     user.lastName = nextLastName;
-    user.name = `${nextFirstName} ${nextLastName}`.trim();
+    user.name = nextFullName;
     user.email = nextEmail;
 
     await user.save();
