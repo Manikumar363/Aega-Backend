@@ -32,6 +32,7 @@ import publicCmsRoutes from './routes/publicCms.js';
 import publicCompliancesRoutes from './routes/publicCompliances.js';
 import privacyRoutes from './routes/privacyCms.js';
 import termsRoutes from './routes/termsCms.js';
+import stripeRoutes from './routes/stripe.js';
 import { createAdminUser, createTestUser } from './controllers/userController.js';
 
 dotenv.config();
@@ -127,6 +128,7 @@ app.use('/api/public-cms', publicCmsRoutes);
 app.use('/api/public-compliances', publicCompliancesRoutes);
 app.use('/api/privacy-cms', privacyRoutes);
 app.use('/api/terms-cms', termsRoutes);
+app.use('/api/stripe', stripeRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {

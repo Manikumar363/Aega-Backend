@@ -32,6 +32,8 @@ const userSchema = new mongoose.Schema({
   ],
   resetOtp: { type: String, default: null },
   resetOtpExpiry: { type: Date, default: null },
+  hasActiveSubscription: { type: Boolean, default: false },
+  subscription: { type: mongoose.Schema.Types.ObjectId, ref: 'Subscription', default: null },
   createdAt: { type: Date, default: Date.now }
 });
 
