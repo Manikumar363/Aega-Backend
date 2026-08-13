@@ -68,28 +68,29 @@ export const requireUniversityManagementAccess = (req, res, next) => {
 export const requireAgentManagementPermission = (permissionKey) => async (req, res, next) => {
   try {
     if (!req.user || (req.user.role !== 'agent' && req.user.role !== 'counsellor')) {
-      return res.status(403).json({ error: 'Agent access required.' });
-    }
-
-    if (!['b2b', 'b2c'].includes(req.user.businessType)) {
-      return res.status(403).json({ error: 'B2B or B2C agent access required.' });
+      return res.status(403).json({ error: 'Agent or Counsellor access required.' });
     }
 
     const profile = await AgentProfile.findOne({ userId: req.user.id });
-    // Controller agents might not have an AgentProfile record.
-    // In that case, allow access and treat them as top-level managers.
+    // Controller agents without a profile treat as top-level managers
     if (!profile) {
       return next();
     }
 
-    // Top-level managers/owners (self-registered or self-managed) have all permissions.
+    // Top-level owners have all permissions
     if (!profile.createdBy || String(profile.createdBy) === String(profile.userId)) {
       req.agentProfile = profile;
       return next();
     }
 
-    if (!profile.authorization || !profile.authorization[permissionKey]) {
-      return res.status(403).json({ error: 'You do not have permission for this action.' });
+    // Check specific granted authorization permission
+    if (permissionKey && profile.authorization && profile.authorization[permissionKey] === true) {
+      req.agentProfile = profile;
+      return next();
+    }
+
+    if (permissionKey && (!profile.authorization || !profile.authorization[permissionKey])) {
+      return res.status(403).json({ error: `You do not have permission for this action (${permissionKey}).` });
     }
 
     req.agentProfile = profile;

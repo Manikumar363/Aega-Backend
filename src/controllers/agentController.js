@@ -42,18 +42,52 @@ export const createUniversityRequest = async (req, res) => {
   try {
     const universityId = normalizeText(req.body.universityId);
     const universityName = normalizeText(req.body.name || req.body.universityName);
+    const email = normalizeText(req.body.email || req.body.universityEmail).toLowerCase();
+    const phone = normalizeText(req.body.mobile || req.body.phone);
+    const location = normalizeText(req.body.location);
     const message = normalizeText(req.body.message || req.body.note);
 
     if (!universityId && !universityName) {
       return res.status(400).json({ error: 'universityId or name is required.' });
     }
 
-    const university = universityId
+    let university = universityId
       ? await University.findById(universityId)
       : await University.findOne({ name: universityName });
 
+    if (!university && email) {
+      // Check duplicate email
+      const existingUni = await University.findOne({ email });
+      const existingUser = await User.findOne({ email });
+      if (existingUni || existingUser) {
+        return res.status(409).json({ error: 'Company already exist with this emailid' });
+      }
+
+      // Create linked user
+      const tempPassword = `UniPass@${Math.floor(1000 + Math.random() * 9000)}`;
+      const newUser = new User({
+        name: universityName,
+        email,
+        phone: phone || null,
+        password: tempPassword,
+        role: 'university'
+      });
+      await newUser.save();
+
+      university = new University({
+        userId: newUser._id,
+        createdBy: req.user.id,
+        name: universityName,
+        email,
+        phone: phone || null,
+        city: location || null,
+        country: 'United Kingdom'
+      });
+      await university.save();
+    }
+
     if (!university) {
-      return res.status(404).json({ error: 'University not found.' });
+      return res.status(400).json({ error: 'Please provide university email to create a new university.' });
     }
 
     const existingPending = await UniversityRequest.findOne({
@@ -79,10 +113,14 @@ export const createUniversityRequest = async (req, res) => {
     await universityRequest.save();
 
     return res.status(201).json({
-      message: 'University request submitted successfully.',
+      message: 'University added successfully.',
+      university,
       request: universityRequest
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({ error: 'Company already exist with this emailid' });
+    }
     return res.status(500).json({ error: error.message });
   }
 };

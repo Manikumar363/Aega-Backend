@@ -76,7 +76,6 @@ export const createUniversity = async (req, res) => {
   try {
     const { name, email, phone, website, region, country, city, logo, accreditation, coursesOffered, description } = req.body;
     const isUniversityAccount = req.user?.role === 'university';
-    const userId = isUniversityAccount ? req.user.id : null;
     const createdBy = req.user.id;
 
     // Validate required fields
@@ -87,27 +86,46 @@ export const createUniversity = async (req, res) => {
       });
     }
 
-    if (isUniversityAccount) {
-      // Check if university already exists for this university account
-      const existingUniversity = await University.findOne({ userId });
-      if (existingUniversity) {
-        return res.status(400).json({
-          success: false,
-          message: 'University profile already exists for this user'
-        });
-      }
+    const cleanEmail = email.trim().toLowerCase();
+
+    // Check for duplicate email in User & University collections
+    const existingUni = await University.findOne({ email: cleanEmail });
+    const existingUser = await User.findOne({ email: cleanEmail });
+    if (existingUni || existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: 'Company already exist with this emailid',
+        error: 'Company already exist with this emailid'
+      });
+    }
+
+    let userId = isUniversityAccount ? req.user.id : null;
+
+    // If created by agent or admin, create linked User account
+    if (!userId) {
+      const tempPassword = `UniPass@${Math.floor(1000 + Math.random() * 9000)}`;
+      const newUser = new User({
+        name: name.trim(),
+        email: cleanEmail,
+        phone: phone ? phone.trim() : null,
+        password: tempPassword,
+        role: 'university',
+        profilePic: logo || null
+      });
+      await newUser.save();
+      userId = newUser._id;
     }
 
     const university = new University({
       userId,
       createdBy,
       name: name.trim(),
-      email: email.trim().toLowerCase(),
-      phone: phone || null,
-      website: website || null,
-      region: region || null,
-      country: country || null,
-      city: city || null,
+      email: cleanEmail,
+      phone: phone ? phone.trim() : null,
+      website: website ? website.trim() : null,
+      region: region ? region.trim() : null,
+      country: country ? country.trim() : null,
+      city: city ? city.trim() : null,
       logo: logo || null,
       accreditation: accreditation || null,
       coursesOffered: coursesOffered || [],
@@ -122,6 +140,13 @@ export const createUniversity = async (req, res) => {
       message: 'University profile created successfully'
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: 'Company already exist with this emailid',
+        error: 'Company already exist with this emailid'
+      });
+    }
     return res.status(500).json({
       success: false,
       message: 'Error creating university profile',

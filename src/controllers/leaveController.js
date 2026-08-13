@@ -62,7 +62,7 @@ export const getMyLeaveRequests = async (req, res) => {
 export const getTeamLeaveRequests = async (req, res) => {
   try {
     const isAdmin = req.user?.role === 'admin';
-    const query = isAdmin ? {} : { ownerAgentId: req.user.id };
+    const query = isAdmin ? {} : { $or: [{ ownerAgentId: req.user.id }, { counsellorId: req.user.id }] };
 
     const leaves = await LeaveRequest.find(query)
       .sort({ createdAt: -1 })

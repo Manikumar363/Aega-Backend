@@ -8,7 +8,7 @@ export const createOffice = async (req, res) => {
       agentId: req.user.id,
       location: normalizeText(req.body.location),
       fullAddress: normalizeText(req.body.fullAddress),
-      email: normalizeText(req.body.email),
+      email: normalizeText(req.body.email).toLowerCase(),
       mobileNumber: normalizeText(req.body.mobileNumber)
     };
 
@@ -17,11 +17,33 @@ export const createOffice = async (req, res) => {
       return res.status(400).json({ error: `Missing required fields: ${required.join(', ')}` });
     }
 
+    // 1. Email Format Validation without spaces
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(payload.email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address without spaces.' });
+    }
+
+    // 2. Mobile Number Validation (only digits, spaces, +, -)
+    const phoneRegex = /^[+\d\s-]{5,20}$/;
+    if (!phoneRegex.test(payload.mobileNumber)) {
+      return res.status(400).json({ error: 'Mobile number can only contain digits, spaces, "+", and "-". Alphabets are not allowed.' });
+    }
+
+    // 3. Duplicate Email Check across Office and User collections
+    const existingOffice = await Office.findOne({ email: payload.email });
+    const existingUser = await User.findOne({ email: payload.email });
+    if (existingOffice || existingUser) {
+      return res.status(409).json({ error: 'Company already exist with this emailid' });
+    }
+
     const office = new Office(payload);
     await office.save();
 
     return res.status(201).json({ message: 'Office created successfully.', office });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({ error: 'Company already exist with this emailid' });
+    }
     return res.status(500).json({ error: error.message });
   }
 };

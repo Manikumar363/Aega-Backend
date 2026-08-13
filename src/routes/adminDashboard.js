@@ -4,7 +4,7 @@ import { getAdminDashboardStats, searchEverything } from '../controllers/adminDa
 
 const router = express.Router();
 
-router.get('/stats', requireAuth, requireAdminRole, getAdminDashboardStats);
-router.get('/search', requireAuth, requireAdminRole, searchEverything);
+router.get('/stats', requireAuth, getAdminDashboardStats);
+router.get('/search', requireAuth, searchEverything);
 
 export default router;
