@@ -42,6 +42,15 @@ export const requireAdminRole = (req, res, next) => {
   return next();
 };
 
+export const requireUniversityRole = (req, res, next) => {
+  const role = req.user?.role;
+  if (role !== 'university') {
+    return res.status(403).json({ error: 'University access required.' });
+  }
+
+  return next();
+};
+
 export const requireAgentOrAdminRole = (req, res, next) => {
   const role = req.user?.role;
   if (role !== 'agent' && role !== 'admin') {
@@ -98,12 +107,4 @@ export const requireAgentManagementPermission = (permissionKey) => async (req, r
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
-};
-
-export const requireUniversityRole = (req, res, next) => {
-  if (!req.user || req.user.role !== 'university') {
-    return res.status(403).json({ error: 'University access required.' });
-  }
-
-  return next();
 };

@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import User from '../models/user.js';
 import AgentProfile from '../models/agentProfile.js';
-import { sendAgentCredentialsEmail } from '../utils/mailer.js';
+import { sendAgentCredentialsEmail, sendUniversityCredentialsEmail } from '../utils/mailer.js';
 import University from '../models/university.js';
 import UniversityRequest from '../models/universityRequest.js';
 
@@ -73,6 +73,17 @@ export const createUniversityRequest = async (req, res) => {
         role: 'university'
       });
       await newUser.save();
+
+      // Notify the university with login credentials immediately
+      try {
+        await sendUniversityCredentialsEmail({
+          email,
+          fullName: universityName,
+          password: tempPassword
+        });
+      } catch (mailErr) {
+        console.error('Failed to send university credentials email from request:', mailErr);
+      }
 
       university = new University({
         userId: newUser._id,
@@ -189,12 +200,12 @@ export const getUniversityRequestsForUniversity = async (req, res) => {
 
     const requests = await UniversityRequest.find({ universityId: university._id })
       .sort({ createdAt: -1 })
-      .populate('agentId', 'name email role businessType createdAt')
+      .populate('agentId', 'name email role businessType phone createdAt')
       .lean();
 
     const agentIds = requests.map(r => r.agentId?._id || r.agentId).filter(Boolean);
     const agentProfiles = await AgentProfile.find({ userId: { $in: agentIds } })
-      .select('userId complianceScore numberOfAudits activeAlerts riskLevel')
+      .select('userId complianceScore numberOfAudits activeAlerts riskLevel mobileNumber designation')
       .lean();
 
     const profileMap = new Map(agentProfiles.map(p => [String(p.userId), p]));
@@ -209,7 +220,9 @@ export const getUniversityRequestsForUniversity = async (req, res) => {
           complianceScore: profile.complianceScore ?? 100,
           numberOfAudits: profile.numberOfAudits ?? 0,
           activeAlerts: profile.activeAlerts ?? 0,
-          riskLevel: profile.riskLevel || 'LOW'
+          riskLevel: profile.riskLevel || 'LOW',
+          mobileNumber: profile.mobileNumber || null,
+          designation: profile.designation || null
         } : null
       };
     });
@@ -661,7 +674,8 @@ export const adminDeleteAgent = async (req, res) => {
     await Promise.all([
       AgentProfile.deleteOne({ _id: agent._id }),
       User.deleteOne({ _id: agent.userId }),
-      Company.deleteMany({ agentId: agent.userId })
+      Company.deleteMany({ agentId: agent.userId }),
+      UniversityRequest.deleteMany({ agentId: agent.userId })
     ]);
 
     return res.json({ message: 'Agent deleted successfully.' });

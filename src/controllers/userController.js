@@ -275,6 +275,10 @@ export const loginUser = async (req, res) => {
   const { email, password, role } = req.body;
   try {
     const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(401).json({ error: 'Unregistred EmailId' });
+    }
+
     // Assert role match (agents created as counsellor or agent both map to agent role tab)
     const isRoleMatch =
       !role ||
@@ -283,7 +287,21 @@ export const loginUser = async (req, res) => {
       (role === 'counsellor' && (user.role === 'agent' || user.role === 'counsellor'));
 
     if (!isRoleMatch) {
-      return res.status(401).json({ error: 'Unregistered emailID' });
+      return res.status(401).json({ error: 'Unregistred EmailId' });
+    }
+
+    // Check university account admin approval status
+    if (user.role === 'university') {
+      const university = await University.findOne({ userId: user._id });
+      if (!university) {
+        return res.status(401).json({ error: 'Unregistred EmailId' });
+      }
+      if (university.status === 'pending') {
+        return res.status(403).json({ error: 'Your account is pending admin approval. You will receive an email once accepted.' });
+      }
+      if (university.status === 'inactive') {
+        return res.status(403).json({ error: 'Your account registration was rejected by the admin.' });
+      }
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -590,8 +608,8 @@ export const changeMyPassword = async (req, res) => {
       return res.status(404).json({ error: 'User not found.' });
     }
 
-    if (user.role !== 'agent' && user.role !== 'counsellor') {
-      return res.status(403).json({ error: 'Agent profile access only.' });
+    if (user.role !== 'agent' && user.role !== 'counsellor' && user.role !== 'university') {
+      return res.status(403).json({ error: 'Unauthorized.' });
     }
 
     const isMatch = await bcrypt.compare(currentPassword, user.password);
@@ -761,6 +779,15 @@ export const getMyComplianceSummary = async (req, res) => {
       console.error('Error calculating completed CDP hours:', cdpErr);
     }
 
+    let targetCdpHours = 120;
+    try {
+      const CdpCourse = mongoose.model('CdpCourse');
+      const courses = await CdpCourse.find().select('timeInHr');
+      targetCdpHours = courses.reduce((sum, c) => sum + (Number(c.timeInHr) || 0), 0) || 120;
+    } catch (err) {
+      console.error('Error calculating target CDP hours:', err);
+    }
+
     return res.status(200).json({
       success: true,
       data: {
@@ -769,7 +796,7 @@ export const getMyComplianceSummary = async (req, res) => {
         activeIssues: activeAlerts,
         riskLevel,
         completedCdpHours,
-        targetCdpHours: 120
+        targetCdpHours
       }
     });
   } catch (error) {

@@ -1,5 +1,8 @@
 import Complaint from '../models/complaint.js';
-import { sendComplaintReplyEmail } from '../utils/mailer.js';
+import University from '../models/university.js';
+import AgentProfile from '../models/agentProfile.js';
+import Company from '../models/company.js';
+import { sendComplaintReplyEmail, sendComplaintRaisedEmail } from '../utils/mailer.js';
 
 const normalizeText = (value) => String(value || '').trim();
 
@@ -208,6 +211,30 @@ export const raiseTargetComplaint = async (req, res) => {
       return res.status(400).json({ error: 'targetType must be one of: agent, company, university.' });
     }
 
+    // Retrieve target email & name
+    let targetEmail = null;
+    let targetName = '';
+
+    if (targetType.toLowerCase() === 'university') {
+      const university = await University.findById(targetId);
+      if (university) {
+        targetEmail = university.email;
+        targetName = university.name;
+      }
+    } else if (targetType.toLowerCase() === 'agent') {
+      const agent = await AgentProfile.findById(targetId);
+      if (agent) {
+        targetEmail = agent.emailId;
+        targetName = agent.fullName;
+      }
+    } else if (targetType.toLowerCase() === 'company') {
+      const company = await Company.findById(targetId);
+      if (company) {
+        targetEmail = company.email;
+        targetName = company.name;
+      }
+    }
+
     const complaint = new Complaint({
       targetType: targetType.toLowerCase(),
       targetId,
@@ -224,6 +251,20 @@ export const raiseTargetComplaint = async (req, res) => {
     });
 
     await complaint.save();
+
+    // Trigger email notification if target email was found
+    if (targetEmail) {
+      try {
+        await sendComplaintRaisedEmail({
+          email: targetEmail,
+          targetName,
+          typeOfComplaint,
+          description
+        });
+      } catch (mailErr) {
+        console.error('Failed to notify target of admin raised complaint:', mailErr.message);
+      }
+    }
 
     return res.status(201).json({
       message: 'Complaint raised successfully by admin.',

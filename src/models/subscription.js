@@ -11,9 +11,19 @@ const subscriptionSchema = new mongoose.Schema({
   amountPaidGbp: { type: Number, required: true },
   currency: { type: String, default: 'gbp' },
   billingCycle: { type: String, default: 'yearly' },
+
+  // Provider-independent fields
+  paymentProvider: { type: String, enum: ['flywire', 'stripe', 'mock'], default: 'flywire' },
+  providerCustomerId: { type: String, default: null },
+  providerSubscriptionId: { type: String, default: null },
+  providerPaymentId: { type: String, default: null },
+  gracePeriodEndsAt: { type: Date, default: null },
+
+  // Legacy fields retained for backwards compatibility
   stripeCustomerId: { type: String, default: null },
   stripeSubscriptionId: { type: String, default: null },
   stripePriceId: { type: String, default: null },
+
   status: { type: String, enum: ['active', 'canceled', 'past_due', 'unpaid', 'none'], default: 'none' },
   currentPeriodStart: { type: Date, default: null },
   currentPeriodEnd: { type: Date, default: null },

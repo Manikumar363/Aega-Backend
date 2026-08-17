@@ -5,7 +5,8 @@ import {
   getMyEnrolledCourses,
   getCourseProgress,
   updateCourseProgress,
-  getCourseProgressStats
+  getCourseProgressStats,
+  updateCourseSchedule
 } from '../controllers/courseEnrollmentController.js';
 import { requireAuth } from '../middleware/auth.js';
 
@@ -28,5 +29,8 @@ router.get('/progress/:progressId', requireAuth, getCourseProgress);
 
 // Update course progress with certificate
 router.put('/progress/:progressId', requireAuth, updateCourseProgress);
+
+// Update course schedule (startDate & notes)
+router.put('/progress/:progressId/schedule', requireAuth, updateCourseSchedule);
 
 export default router;

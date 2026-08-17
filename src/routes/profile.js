@@ -23,7 +23,7 @@ router.get('/me/:userId', requireAuth, requireAgentRole, getMyAgentProfile);
 router.put('/me/:userId', requireAuth, requireAgentRole, updateMyAgentProfile);
 router.delete('/me', requireAuth, deleteMyAccount);
 router.delete('/me/:userId', requireAuth, deleteMyAccount);
-router.put('/reset-password', requireAuth, requireAgentRole, changeMyPassword);
+router.put('/reset-password', requireAuth, changeMyPassword);
 router.post('/documents', requireAuth, requireAgentRole, addMyProfileDocument);
 router.post('/documents/:userId', requireAuth, requireAgentRole, addMyProfileDocument);
 

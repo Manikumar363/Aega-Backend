@@ -370,3 +370,64 @@ export const getTargetUserEnrolledCourses = async (req, res) => {
     });
   }
 };
+
+export const updateCourseSchedule = async (req, res) => {
+  try {
+    const { progressId } = req.params;
+    const { startDate, notes } = req.body;
+    const userId = req.user.id;
+
+    if (!startDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Start Date is required'
+      });
+    }
+
+    const courseProgress = await CourseProgress.findOne({
+      _id: progressId,
+      userId
+    }).populate('courseId');
+
+    if (!courseProgress) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course progress not found'
+      });
+    }
+
+    const oldStart = new Date(courseProgress.startDate).getTime();
+    const newStart = new Date(startDate).getTime();
+    const isStarted = new Date().getTime() >= oldStart || courseProgress.status === 'completed';
+
+    if (isStarted && oldStart !== newStart) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot change start date once the course has already started.'
+      });
+    }
+
+    courseProgress.startDate = new Date(startDate);
+    const courseTime = courseProgress.courseId ? Number(courseProgress.courseId.timeInHr) || 30 : 30;
+    courseProgress.dueDate = calculateDueDate(courseProgress.startDate, courseTime);
+
+    if (notes !== undefined) {
+      courseProgress.notes = normalizeText(notes);
+    }
+
+    courseProgress.updatedAt = new Date();
+    await courseProgress.save();
+
+    return res.json({
+      success: true,
+      message: 'Course schedule updated successfully',
+      data: courseProgress
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Error updating course schedule',
+      error: error.message
+    });
+  }
+};
