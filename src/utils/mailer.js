@@ -194,3 +194,46 @@ export const sendComplaintRaisedEmail = async ({ email, targetName, typeOfCompla
 
   return transporter.sendMail(mailOptions);
 };
+
+export const sendContactInquiryEmail = async ({ name, email, phone, subject, message }) => {
+  const appName = process.env.APP_NAME || 'AEGA';
+  const supportEmail = process.env.SUPPORT_EMAIL || process.env.EMAIL_USER;
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+    to: supportEmail,
+    replyTo: email,
+    subject: `[${appName} Support Inquiry] ${subject || 'New Contact Request'}`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px; border-radius: 8px;">
+        <h2 style="color: #F58A07; border-bottom: 2px solid #F58A07; padding-bottom: 10px; margin-top: 0;">New Support Inquiry</h2>
+        <p>You have received a new contact submission from the public marketing site:</p>
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+          <tr>
+            <td style="padding: 8px 0; font-weight: bold; width: 120px; border-bottom: 1px solid #f4f4f4;">Name:</td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #f4f4f4;">${name}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; font-weight: bold; border-bottom: 1px solid #f4f4f4;">Email:</td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #f4f4f4;"><a href="mailto:${email}">${email}</a></td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; font-weight: bold; border-bottom: 1px solid #f4f4f4;">Phone:</td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #f4f4f4;">${phone || 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; font-weight: bold; border-bottom: 1px solid #f4f4f4;">Subject:</td>
+            <td style="padding: 8px 0; border-bottom: 1px solid #f4f4f4;">${subject || 'N/A'}</td>
+          </tr>
+        </table>
+        <div style="background-color: #f9f9f9; padding: 15px; border-radius: 6px; border-left: 4px solid #F58A07; margin-top: 20px;">
+          <strong style="display: block; margin-bottom: 10px; color: #555;">Message:</strong>
+          <p style="margin: 0; white-space: pre-wrap; color: #333; line-height: 1.6;">${message}</p>
+        </div>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
+        <p style="color: #888; font-size: 11px; text-align: center; margin-bottom: 0;">This email was generated automatically by the ${appName} Contact Form.</p>
+      </div>
+    `
+  };
+
+  return transporter.sendMail(mailOptions);
+};
