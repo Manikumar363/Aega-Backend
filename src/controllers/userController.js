@@ -154,6 +154,10 @@ export const signupUser = async (req, res) => {
       return res.status(400).json({ error: 'email, password, confirmPassword and role are required.' });
     }
 
+    if (String(email).trim() !== String(email)) {
+      return res.status(400).json({ error: 'Leading/Trailing spaces are not allowed in emailid fields.' });
+    }
+
     if (password !== confirmPassword) {
       return res.status(400).json({ error: 'Password and confirmPassword must match.' });
     }
@@ -274,7 +278,11 @@ export const signupUser = async (req, res) => {
 export const loginUser = async (req, res) => {
   const { email, password, role } = req.body;
   try {
-    const user = await User.findOne({ email });
+    if (email && String(email).trim() !== String(email)) {
+      return res.status(400).json({ error: 'Leading/Trailing spaces are not allowed in emailid fields.' });
+    }
+
+    const user = await User.findOne({ email: new RegExp('^' + String(email || '').trim() + '$', 'i') });
     if (!user) {
       return res.status(401).json({ error: 'Unregistred EmailId' });
     }

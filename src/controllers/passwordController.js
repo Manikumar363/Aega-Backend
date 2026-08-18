@@ -14,7 +14,7 @@ export const requestPasswordReset = async (req, res) => {
       return res.status(400).json({ error: 'Email is required.' });
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: new RegExp('^' + String(email || '').trim() + '$', 'i') });
     if (!user) {
       return res.status(404).json({ error: 'User not found with this email.' });
     }
@@ -50,7 +50,7 @@ export const verifyOtp = async (req, res) => {
       return res.status(400).json({ error: 'Email and OTP are required.' });
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: new RegExp('^' + String(email || '').trim() + '$', 'i') });
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
     }
@@ -96,7 +96,7 @@ export const resetPassword = async (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: new RegExp('^' + String(email || '').trim() + '$', 'i') });
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
     }

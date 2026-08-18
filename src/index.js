@@ -36,6 +36,7 @@ import subscriptionRoutes from './routes/subscription.js';
 import flywireRoutes from './routes/flywire.js';
 import stripeRoutes from './routes/stripe.js';
 import supportRoutes from './routes/support.js';
+import policyCmsRoutes from './routes/policyCms.js';
 import { createAdminUser, createTestUser } from './controllers/userController.js';
 
 dotenv.config();
@@ -135,6 +136,7 @@ app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/flywire', flywireRoutes);
 app.use('/api/stripe', stripeRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/policy-cms', policyCmsRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
