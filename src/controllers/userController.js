@@ -226,7 +226,7 @@ export const signupUser = async (req, res) => {
           createdBy: user._id,
           name: resolvedUniversityName,
           email: user.email,
-          status: 'pending'
+          status: 'active'
         });
       }
     } else if (normalizedRole === 'agent') {
@@ -295,9 +295,6 @@ export const loginUser = async (req, res) => {
       const university = await University.findOne({ userId: user._id });
       if (!university) {
         return res.status(401).json({ error: 'Unregistred EmailId' });
-      }
-      if (university.status === 'pending') {
-        return res.status(403).json({ error: 'Your account is pending admin approval. You will receive an email once accepted.' });
       }
       if (university.status === 'inactive') {
         return res.status(403).json({ error: 'Your account registration was rejected by the admin.' });

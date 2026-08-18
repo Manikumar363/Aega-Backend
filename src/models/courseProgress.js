@@ -44,7 +44,7 @@ const courseProgressSchema = new mongoose.Schema({
   },
   progress: {
     type: Number,
-    default: 0,
+    default: 3,
     min: 0,
     max: 100
   },

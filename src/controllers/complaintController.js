@@ -220,18 +220,36 @@ export const raiseTargetComplaint = async (req, res) => {
       if (university) {
         targetEmail = university.email;
         targetName = university.name;
+      } else {
+        const user = await User.findById(targetId);
+        if (user) {
+          targetEmail = user.email;
+          targetName = user.name || user.companyName;
+        }
       }
     } else if (targetType.toLowerCase() === 'agent') {
       const agent = await AgentProfile.findById(targetId);
       if (agent) {
         targetEmail = agent.emailId;
         targetName = agent.fullName;
+      } else {
+        const user = await User.findById(targetId);
+        if (user) {
+          targetEmail = user.email;
+          targetName = user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim();
+        }
       }
     } else if (targetType.toLowerCase() === 'company') {
       const company = await Company.findById(targetId);
       if (company) {
-        targetEmail = company.email;
-        targetName = company.name;
+        targetEmail = company.emailId || company.email;
+        targetName = company.companyName || company.name;
+      } else {
+        const user = await User.findById(targetId);
+        if (user) {
+          targetEmail = user.email;
+          targetName = user.companyName || user.name;
+        }
       }
     }
 

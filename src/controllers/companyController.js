@@ -112,12 +112,10 @@ export const getCompanies = async (req, res) => {
     const isAdmin = ['admin', 'sponsor'].includes(req.user.role);
     const query = isAdmin ? {} : { agentId: req.user.id };
     
-    // Fetch Company records
     const companies = await Company.find(query).sort({ createdAt: -1 });
     
     if (isAdmin) {
-      // Fetch B2B/B2C User agents that act as companies
-      const users = await User.find({ role: 'agent', businessType: { $in: ['b2b', 'b2c'] } }).sort({ createdAt: -1 });
+      const users = await User.find({ $or: [ { role: 'agent', businessType: { $in: ['b2b', 'b2c'] } }, { role: 'counsellor' } ] }).sort({ createdAt: -1 });
       
       const normalizedUsers = users.map((u) => ({
         _id: u._id,
@@ -125,12 +123,16 @@ export const getCompanies = async (req, res) => {
         founderName: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.name,
         emailId: u.email,
         mobileNumber: u.phone || 'N/A',
-        designation: u.businessType === 'b2c' ? 'B2C' : 'B2B',
+        designation: u.role === 'counsellor' ? 'Counsellor' : (u.businessType === 'b2c' ? 'B2C' : 'B2B'),
         office: u.city || u.state || 'N/A',
         country: u.country || 'N/A',
         profileImage: u.profileImage || null,
         isUserAgent: true,
-        createdAt: u.createdAt
+        createdAt: u.createdAt,
+        complianceScore: u.complianceScore ?? 100,
+        activeAlerts: u.activeAlerts ?? 0,
+        numberOfAudits: u.numberOfAudits ?? 0,
+        riskLevel: u.riskLevel ?? 'LOW'
       }));
 
       const normalizedCompanies = companies.map((c) => ({
@@ -144,10 +146,13 @@ export const getCompanies = async (req, res) => {
         country: c.country,
         profileImage: null,
         isUserAgent: false,
-        createdAt: c.createdAt
+        createdAt: c.createdAt,
+        complianceScore: c.complianceScore ?? 100,
+        activeAlerts: c.activeAlerts ?? 0,
+        numberOfAudits: c.numberOfAudits ?? 0,
+        riskLevel: c.riskLevel ?? 'LOW'
       }));
 
-      // Merge and sort by createdAt descending
       const merged = [...normalizedCompanies, ...normalizedUsers].sort((a, b) => {
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
@@ -167,12 +172,12 @@ export const getCompanyOverview = async (req, res) => {
       .populate('agentId', 'firstName lastName name email role businessType');
 
     if (!company) {
-      // Fallback: check if it's a B2B/B2C agent User
       const user = await User.findById(req.params.companyId);
-      if (!user || user.role !== 'agent' || !['b2b', 'b2c'].includes(user.businessType)) {
+      if (!user || (user.role !== 'agent' && user.role !== 'counsellor')) {
         return res.status(404).json({ error: 'Company not found.' });
       }
 
+      const agentProfile = await AgentProfile.findOne({ userId: user._id });
       return res.json({
         info: {
           id: user._id,
@@ -180,9 +185,9 @@ export const getCompanyOverview = async (req, res) => {
           founderName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name,
           emailId: user.email,
           mobileNumber: user.phone || 'N/A',
-          designation: user.businessType === 'b2c' ? 'B2C' : 'B2B',
-          office: user.city || user.state || 'N/A',
-          country: user.country || 'N/A',
+          designation: user.role === 'counsellor' ? 'Counsellor' : (user.businessType === 'b2c' ? 'B2C' : 'B2B'),
+          office: agentProfile?.office || user.city || user.state || 'N/A',
+          country: agentProfile?.country || user.country || 'N/A',
           profileImage: user.profileImage || null,
           createdAt: user.createdAt
         },
@@ -197,6 +202,8 @@ export const getCompanyOverview = async (req, res) => {
       return res.status(403).json({ error: 'You do not have access to this company.' });
     }
 
+    const agentProfile = company.agentId ? await AgentProfile.findOne({ userId: company.agentId._id || company.agentId }) : null;
+
     return res.json({
       info: {
         id: company._id,
@@ -205,8 +212,8 @@ export const getCompanyOverview = async (req, res) => {
         emailId: company.emailId,
         mobileNumber: company.mobileNumber,
         designation: company.designation || 'B2B',
-        office: company.office,
-        country: company.country,
+        office: agentProfile?.office || company.office || 'N/A',
+        country: agentProfile?.country || company.country || 'N/A',
         companyDocument1: company.companyDocument1,
         companyDocument2: company.companyDocument2,
         createdAt: company.createdAt
@@ -225,6 +232,26 @@ export const getCompanyByIdForAdmin = async (req, res) => {
       .populate('agentId', 'firstName lastName name email role businessType');
 
     if (!company) {
+      const user = await User.findById(req.params.companyId);
+      if (user && ((user.role === 'agent' && ['b2b', 'b2c'].includes(user.businessType)) || user.role === 'counsellor')) {
+        return res.json({
+          info: {
+            id: user._id,
+            companyName: user.companyName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name,
+            founderName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name,
+            emailId: user.email,
+            mobileNumber: user.phone || 'N/A',
+            designation: user.role === 'counsellor' ? 'Counsellor' : (user.businessType === 'b2c' ? 'B2C' : 'B2B'),
+            office: user.city || user.state || 'N/A',
+            country: user.country || 'N/A',
+            companyDocument1: '',
+            companyDocument2: '',
+            createdAt: user.createdAt
+          },
+          agent: user,
+          performanceMatrix: null
+        });
+      }
       return res.status(404).json({ error: 'Company not found.' });
     }
 
@@ -292,9 +319,9 @@ export const adminUpdateCompany = async (req, res) => {
     const { companyId } = req.params;
     let company = await Company.findById(companyId);
     if (!company) {
-      // Fallback: check if B2B/B2C user agent
+      // Fallback: check if B2B/B2C user agent or counsellor
       const user = await User.findById(companyId);
-      if (user && user.role === 'agent' && ['b2b', 'b2c'].includes(user.businessType)) {
+      if (user && ((user.role === 'agent' && ['b2b', 'b2c'].includes(user.businessType)) || user.role === 'counsellor')) {
         const name = normalizeField(req.body.founderName || req.body.companyName);
         const nextFirstName = name.split(' ')[0] || user.firstName;
         const nextLastName = name.split(' ').slice(1).join(' ') || user.lastName;
@@ -335,24 +362,24 @@ export const adminUpdateCompany = async (req, res) => {
     company.office = normalizeField(req.body.office) || company.office;
     company.country = normalizeField(req.body.country) || company.country;
 
+    if (req.body.companyDocument1) company.companyDocument1 = normalizeField(req.body.companyDocument1);
+    if (req.body.companyDocument2) company.companyDocument2 = normalizeField(req.body.companyDocument2);
+
     await company.save();
 
+    // Sync with User agent profile if agentId exists
     if (company.agentId) {
       const user = await User.findById(company.agentId);
       if (user) {
-        const name = company.founderName || company.companyName;
-        const nextFirstName = name.split(' ')[0] || user.firstName;
-        const nextLastName = name.split(' ').slice(1).join(' ') || user.lastName;
-
+        const nextFirstName = company.founderName.split(' ')[0] || user.firstName;
+        const nextLastName = company.founderName.split(' ').slice(1).join(' ') || user.lastName;
+        
         user.firstName = nextFirstName;
         user.lastName = nextLastName;
-        user.name = name || user.name;
-        user.email = company.emailId || user.email;
-        user.phone = company.mobileNumber || user.phone;
-        user.country = company.country || user.country;
-        user.city = company.office || user.city;
-        user.companyName = company.companyName || user.companyName;
-
+        user.name = company.founderName;
+        user.email = company.emailId;
+        user.phone = company.mobileNumber;
+        user.companyName = company.companyName;
         await user.save();
 
         const profile = await AgentProfile.findOne({ userId: user._id });
@@ -379,9 +406,9 @@ export const adminDeleteCompany = async (req, res) => {
     const { companyId } = req.params;
     let company = await Company.findById(companyId);
     if (!company) {
-      // Fallback: check if B2B/B2C user agent
+      // Fallback: check if B2B/B2C user agent or counsellor
       const user = await User.findById(companyId);
-      if (user && user.role === 'agent' && ['b2b', 'b2c'].includes(user.businessType)) {
+      if (user && ((user.role === 'agent' && ['b2b', 'b2c'].includes(user.businessType)) || user.role === 'counsellor')) {
         await Promise.all([
           User.deleteOne({ _id: user._id }),
           AgentProfile.deleteOne({ userId: user._id }),
@@ -401,6 +428,96 @@ export const adminDeleteCompany = async (req, res) => {
 
     await Company.deleteOne({ _id: company._id });
     return res.json({ message: 'Company deleted successfully.' });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const adminCreateCompany = async (req, res) => {
+  try {
+    const companyName = normalizeField(req.body.companyName);
+    const emailId = normalizeField(req.body.emailId).toLowerCase();
+    const mobileNumber = normalizeField(req.body.mobileNumber);
+    const addressLocation = normalizeField(req.body.addressLocation);
+    const companyType = normalizeField(req.body.companyType); // 'B2B' | 'B2C' | 'Counsellor'
+    const companyDocument1 = normalizeField(req.body.companyDocument1);
+    const companyDocument2 = normalizeField(req.body.companyDocument2);
+
+    if (!companyName || !emailId || !mobileNumber || !addressLocation || !companyType || !companyDocument1 || !companyDocument2) {
+      return res.status(400).json({ error: 'All fields including both documents are required.' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailId)) {
+      return res.status(400).json({ error: 'Invalid email ID format.' });
+    }
+
+    let role = 'agent';
+    let businessType = 'b2b';
+    if (companyType === 'B2C') {
+      role = 'agent';
+      businessType = 'b2c';
+    } else if (companyType === 'Counsellor') {
+      role = 'counsellor';
+      businessType = null;
+    }
+
+    // Duplicate email check for same role
+    const existingUserWithRole = await User.findOne({ email: emailId, role });
+    if (existingUserWithRole) {
+      return res.status(400).json({ error: `A company or user with this email already exists under the ${companyType} role.` });
+    }
+
+    const tempPassword = `Pass@${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const user = new User({
+      companyName,
+      name: companyName,
+      firstName: companyName,
+      email: emailId,
+      phone: mobileNumber,
+      password: tempPassword,
+      role,
+      businessType,
+      city: addressLocation,
+      country: addressLocation
+    });
+    await user.save();
+
+    const companyData = {
+      companyName,
+      founderName: companyName,
+      emailId,
+      mobileNumber,
+      designation: companyType,
+      office: addressLocation,
+      country: addressLocation,
+      companyDocument1,
+      companyDocument2,
+      agentId: user._id
+    };
+
+    const company = new Company(companyData);
+    await company.save();
+
+    try {
+      await sendAgentCredentialsEmail({
+        email: emailId,
+        fullName: companyName,
+        password: tempPassword
+      });
+    } catch (emailErr) {
+      console.error('Failed to send credentials email:', emailErr.message);
+    }
+
+    return res.status(201).json({
+      message: 'Company added successfully',
+      company,
+      credentials: {
+        email: emailId,
+        password: tempPassword
+      }
+    });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
