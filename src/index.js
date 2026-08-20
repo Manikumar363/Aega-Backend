@@ -42,7 +42,7 @@ import { createAdminUser, createTestUser } from './controllers/userController.js
 dotenv.config();
 
 const app = express();
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:4000,http://localhost:3000, http://localhost:5173')
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:4000,http://localhost:3000, http://localhost:5173,https://admin.aega.world')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
@@ -52,7 +52,8 @@ const isAllowedOrigin = (origin) => {
     return true;
   }
 
-  if (allowedOrigins.includes(origin)) {
+  const cleanOrigin = origin.replace(/\/$/, '');
+  if (allowedOrigins.includes(origin) || allowedOrigins.includes(cleanOrigin)) {
     return true;
   }
 
