@@ -42,7 +42,7 @@ import { createAdminUser, createTestUser } from './controllers/userController.js
 dotenv.config();
 
 const app = express();
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:4000,http://localhost:3000, http://localhost:5173,https://admin.aega.world')
+const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:4000,http://localhost:3000,http://localhost:5173,https://admin.aega.world,https://aega-frontend.vercel.app,https://aega.world,https://www.aega.world')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
@@ -54,6 +54,11 @@ const isAllowedOrigin = (origin) => {
 
   const cleanOrigin = origin.replace(/\/$/, '');
   if (allowedOrigins.includes(origin) || allowedOrigins.includes(cleanOrigin)) {
+    return true;
+  }
+
+  // Explicit fallback for custom domain of AEGA
+  if (cleanOrigin === 'https://aega.world' || cleanOrigin === 'https://www.aega.world') {
     return true;
   }
 
@@ -88,8 +93,8 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/aega', {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => console.log('MongoDB connected'))
-.catch((err) => console.error('MongoDB connection error:', err));
+  .then(() => console.log('MongoDB connected'))
+  .catch((err) => console.error('MongoDB connection error:', err));
 
 // Request/Response logging middleware for agent-management to debug score mismatches
 app.use((req, res, next) => {
